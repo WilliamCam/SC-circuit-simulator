@@ -1,8 +1,11 @@
 module Simulate
+#simulation module for RLC-SQUID Parallel Configuration with low pass filter
 
 using DifferentialEquations
 using Statistics
 using Plots
+using FileIO
+
 include("constants.jl")
 include("EquationsOfMotion.jl")
 include("Sweeps\\FrequencySweep.jl")
@@ -14,47 +17,65 @@ Computes the root mean squared of a vector x
 """
 function RMS(x)
     sqrt(mean(x.^2))
-end
+end #end RMS
+
 """
     output_func(sol,i)
+
 output function for ensemble problem.
 Gives the RMS Voltage.
 """
 function output_func(sol, i)
     (RMS(@. phi0/(2.0*pi)*sol[1,:]),false)
-end
+end #end output_func
 
-function Frequency_response(Ib, Iin, NΦ₀, Nperiods, N_f_values, df)
-    tspan = (0.0,2*pi*Nperiods/ωλ)
-    tsaves = LinRange(0.0,tspan[end],1000);
+"""
+    frequency_response(Ib, Iin, NΦ₀, df, N_f_values = 500, N_periods=50
 
-    df_vec = LinRange(-df*ωλ,df*ωλ,N_f_values)
+Simulates the frequency response of the system from -df*ωλ to df*ωλ by
+performing N_f_values transient simulations 2*pi*N_periods/ωλ seconds long
+"""
+function frequency_response(Ib, Iin, NΦ₀, df; N_fvalues = 500, N_periods=100, export_result = false)
+    tspan = (0.0,2*pi*N_periods/ωλ) #simulation timespan
+    tsaves = LinRange(2*pi/ωλ,tspan[end],1000); #time points to save at
 
-    p_consts = df_sweep_consts(Ib, Iin, NΦ₀*phi0)
-    p_vars = df_sweep_vars(ωλ+df_vec[1],junc_i)
+    df_vec = LinRange(-df*ωλ,df*ωλ,N_fvalues) #frequency points
 
-    p = df_sweep_params(p_consts,p_vars);
+    p_consts = df_sweep_consts(Ib, Iin, NΦ₀*phi0) #input constant parameters
+    p_vars = df_sweep_vars(ωλ+df_vec[1],junc_i) #input variable parameters
 
-    function prob_func(prob,i,repeat)
+    p = df_sweep_params(p_consts,p_vars); #input parameters master struct
+
+    function prob_func(prob,i,repeat) #problem funtion modifies input parameters
         prob.p.v.ω = ωλ + df_vec[i]
         prob
-    end
+    end #end prob_func
 
-    #solve for inital conditions
-    prob_RLC_para_ini = ODEProblem(RLC_para_fswp!, u0, (0.0, 100/ωλ), p, abstol = 1e-3);
-    ui = solve(prob_RLC_para_ini, save_everystep=false).u[end];
+    prob_RLC_para = ODEProblem(RLC_para_fswp!, u0, tspan, p, abstol = 1e-3, saveat = tsaves, save_idxs=[10]); #problem
 
-    prob_RLC_para = ODEProblem(RLC_para_fswp!, ui, tspan, p, abstol = 1e-3, saveat = tsaves, save_idxs=[10]);
+    ensemble_prob = EnsembleProblem(prob_RLC_para, prob_func=prob_func, output_func = output_func); #ensemble
 
-    ensemble_prob = EnsembleProblem(prob_RLC_para, prob_func=prob_func, output_func = output_func);
+    sim = solve(ensemble_prob,Vern6(),EnsembleThreads(),trajectories=N_fvalues, maxiters=1e9, progress=true) #solve ensemble
 
-    sim = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=N_f_values, maxiters=1e9, progress=true)
-
+    #plot result
     graph = plot((ωλ .+ df_vec)./ωλ,sim[:],
-        title = "RLC-SQUID Parallel Config \n Frequency Response", xlabel = "Detuning (δ)", ylabel = "Vout (Vrms)")
-
+        title = "RLC-SQUID Parallel Config \n Frequency Response",
+        xlabel = "Detuning (δ)",
+        ylabel = "Vout (Vrms)"
+    )
     display(graph)
+
+    if export_result == true #export simulation result to .jld2
+        label_string = string(p_consts.Iin*1.0e9) * "nV-" * string(NΦ₀) * "Φ₀-" * string(df) * "δ"
+        with jldopen("simlogs.jld2", "a+") do file
+            file[label_string] = sim
+    end #data export
+
     return sim
-end
-export Frequency_response
-end
+
+
+end #end frequency_response
+
+export frequency_response
+
+end #end module
