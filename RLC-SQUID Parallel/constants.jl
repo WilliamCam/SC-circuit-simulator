@@ -30,6 +30,7 @@ const Minp = phi0/0.525e-6 #input coil coupling
 const ωλ = 200.0e+6*2*pi #oscillation frequency
 const Qλ = 1e3 #Quality factor
 const Gλ = 1.0/2.9 #motional admittance
+const Rλ = 1/Gλ #motional resistance
 const Cλ = Gλ/(Qλ*ωλ)
 const Lλ = Qλ/(Gλ*ωλ)
 

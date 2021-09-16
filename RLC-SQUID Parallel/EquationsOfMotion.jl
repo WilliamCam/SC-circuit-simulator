@@ -76,3 +76,15 @@ Equation of motion for of junction 6
 function EoM_junction6(i,C1,C2,G,u)
     (2.0*pi*G)/(phi0*C1*C2)*(i[6]-phi0*C1/(2.0*pi)*u[11]-phi0*C2/(2.0*pi)*u[11])
 end
+
+
+
+
+"""
+    Linp_current(i,Iin)
+
+Determines the current through the input inductor Linp
+"""
+function Linp_current(i,Iin, ωin, t)
+    Iin*sin(ωin*t)-i[1]
+end # Linp_current
