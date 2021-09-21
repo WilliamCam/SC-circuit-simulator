@@ -10,6 +10,7 @@ using FileIO
 include("constants.jl")
 include("EquationsOfMotion.jl")
 include("Sweeps\\FrequencySweep.jl")
+include("Sweeps\\FluxSweep.jl")
 
 """
     RMS(x)
@@ -76,23 +77,28 @@ function freq_response(Ib, Iin, NΦ₀, df; N_fvalues = 500, N_periods=100, expo
 
     return sim
 end #end frequency_response
+"""
+    function S21_single_sim(Ib::Float64, Iin::Float64, NΦ₀::Float64; N_periods = 100, ωin = ωλ)
 
-function S21_single_sim(Ib::Float64, Iin::Float64, NΦ₀::Float64; N_periods = 100, df = 0.0)
+Performs a single transient simulation using FrequencySweep.jl in order to determine SQUID amplifier
+gain.
+"""
+function S21_single_sim(Ib::Float64, Iin::Float64, NΦ₀::Float64; N_periods = 100, ωin = ωλ)
     tspan = (0.0,2*pi*N_periods/ωλ) #simulation timespan
-    tsaves = LinRange(2*pi/ωλ,tspan[end],1000); #time points to save at
+    tsaves = LinRange(2*pi/ωλ,tspan[end],10000); #time points to save at
 
     p_consts = df_sweep_consts(Ib, Iin, NΦ₀*phi0) #input constant parameters
-    p_vars = df_sweep_vars(ωλ+df,junc_i) #input variable parameters
+    p_vars = df_sweep_vars(ωin,junc_i) #input variable parameters
     p = df_sweep_params(p_consts,p_vars); #input parameters master struct
 
-    prob_RLC_para = ODEProblem(RLC_para_fswp_S21!, u0_S21, tspan, p, abstol = 1e-3, saveat = tsaves, save_idxs=[10,11,12]); #problem
+    prob_RLC_para = ODEProblem(RLC_para_fswp_S21!, u0_S21, tspan, p, abstol = 1e-3, saveat = tsaves, save_idxs=[10,11]); #problem
 
     # saved_values = SavedValues(Float64, Array{Float64})
     # cb = SavingCallback((u, t, integrator)->integrator(t,Val{0}), saved_values, saveat = tsaves)
 
-    sim = solve(prob_RLC_para, maxiters=1e9, progress=true) #solve problem
+    sim = solve(prob_RLC_para,Vern6(), maxiters=1e9, progress=true) #solve problem
 
-    Vin = (ωλ+df)*Linp.*sim[3,:]
+    Vin = Rλ * Iin .* sin.((ωλ).*sim.t) #Total available power on resonance
     Vout = phi0/(2.0*pi).*sim[1,:]
 
     Iout = phi0/(2.0*pi)*C2.*sim[2,:]
@@ -103,16 +109,68 @@ function S21_single_sim(Ib::Float64, Iin::Float64, NΦ₀::Float64; N_periods = 
 
 
 
-    graph = plot(sim.t, [Vin,Vout.-mean(Vout)],
+    graph = plot(sim.t, [Vin,Vout],
         title = "RLC-SQUID Parallel Config \n S21 parameter sim",
         xlabel = "Time (s)",
         ylabel = "Voltage (V)"
     )
     display(graph)
 
-    return  Vgain, Igain, Pgain
+    return  Vgain, Iout, Pgain
 end #end S21_single_sim
+"""
+    flux_response(Ib::Float64, Iin::Float64; N_periods = 100, ωin = ωλ, Npoints = 200)
 
+Determines the flux-voltage response VΦ of the RLC-SQUID system by perfroming NPoints
+parallel transient simulations with varying flux bias from 0 to 2Φ₀, solving for
+the mean rms output voltage of the system. Result is plotted and saved to simlogs.jld2
+if export_result = true.
+"""
+function flux_response(Ib::Float64, Iin::Float64; N_periods = 20, ωin = ωλ, Npoints = 200, export_result=true)
+    tspan = (0.0,2*pi*N_periods/ωλ) #simulation timespan
+    tsaves = LinRange(2*pi/ωλ,tspan[end],1000); #time points to save at
+
+    flux_vec = LinRange(0.0,2.0*phi0,Npoints) #frequency points
+
+    p_consts = flux_sweep_consts(Ib, Iin, ωin) #input constant parameters
+    p_vars = flux_sweep_vars(flux_vec[1], junc_i) #input variable parameters
+    p = flux_sweep_params(p_consts,p_vars); #input parameters master struct
+
+    function prob_func(prob,i,repeat) #problem funtion modifies input parameters
+        prob.p.v.Φe = flux_vec[i]
+        prob
+    end #end prob_func
+
+    function output_func(sol, i)
+        (mean(phi0/(2.0*pi)*1.0e+6*sol),false)
+    end# output_func
+
+    prob = ODEProblem(RLC_para_fluxswp!, u0, tspan, p, abstol = 1e-5, saveat = tsaves, save_idxs=[10]); #problem
+
+    ensemble_prob = EnsembleProblem(prob, prob_func=prob_func, output_func = output_func); #ensemble
+
+    sim = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Npoints, maxiters=1e9, progress=true) #solve ensemble
+
+    #plot result
+    graph = plot(flux_vec/phi0,sim[:],
+        title = "RLC-SQUID Parallel Config \n Flux-Voltage Response",
+        xlabel = "Flux (Φ₀)",
+        ylabel = "Averaged Vout (μVrms)"
+    )
+    display(graph)
+
+    if export_result == true #export simulation result to .jld2
+        label_string = "FluxResp-" * string(p_consts.Iin*1.0e9) * "nV-" * string(ωin/ωλ) * "ωλ"
+        jldopen("simlogs.jld2", "a+") do file
+            file[label_string] = sim
+        end # file open
+
+    end #data export
+
+    return sim
+end #end flux_response
+
+
+####end module
 export frequency_response
-
 end #end module

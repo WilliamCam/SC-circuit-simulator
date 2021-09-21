@@ -23,12 +23,12 @@ const ωc = 2*pi*I₀₁/(phi0*Gj1) #characteristic Josephsons frequency
 
 #Input coil parameters
 
-const Linp = 200.0e-9 #input inductance
+const Linp = 500.0e-9 #input inductance
 const Minp = phi0/0.525e-6 #input coil coupling
 
 #resonator parameters, start with small Q to reduce simulation time.
 const ωλ = 200.0e+6*2*pi #oscillation frequency
-const Qλ = 1e3 #Quality factor
+const Qλ = 1e6 #Quality factor
 const Gλ = 1.0/2.9 #motional admittance
 const Rλ = 1/Gλ #motional resistance
 const Cλ = Gλ/(Qλ*ωλ)
