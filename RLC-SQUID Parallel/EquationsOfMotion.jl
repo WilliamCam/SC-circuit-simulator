@@ -8,20 +8,20 @@ Result is stored in cache vector i.
 """
 function i_mesh!(i, Ib, Iin, Φe, ωin, t, u)
      i[1] = (2.0*Iin*sin(ωin*t)*Linp*Ls*pi - 4.0*Iin*sin(ωin*t)*Minp^2.0*pi + 4.0*Minp*pi*Φe - Ls*phi0*u[1] - Ls*phi0*u[2] - 2.0*Minp*phi0*u[3] +
-        2.0*Minp*phi0*u[5] + 2.0*Minp*phi0*u[6])/(2.0*(Linp*Ls + Ls*Lλ - 2.0*Minp^2)*pi)
+        2.0*Minp*phi0*u[5] + 2.0*Minp*phi0*(C2*Rλ*u[10]+u[6]))/(2.0*(Linp*Ls + Ls*Lλ - 2.0*Minp^2)*pi)
 
     i[2] = i[1]
 
     i[3] = (-2.0*Iin*sin(ωin*t)*Lλ*Minp*pi + 2.0*Linp*pi*Φe + 2.0*Lλ*pi*Φe - Minp*phi0*u[1] - Minp*phi0*u[2] - Linp*phi0*u[3] -
-        Lλ*phi0*u[3] + Linp*phi0*u[5] + Lλ*phi0*u[5] + Linp*phi0*u[6] + Lλ*phi0*u[6])/((Linp*Ls + Ls*Lλ - 2.0*Minp^2.0)*pi)
+        Lλ*phi0*u[3] + Linp*phi0*u[5] + Lλ*phi0*u[5] + Linp*phi0*(C2*Rλ*u[10]+u[6]) + Lλ*phi0*(C2*Rλ*u[10]+u[6]))/((Linp*Ls + Ls*Lλ - 2.0*Minp^2.0)*pi)
 
-    i[4] = -1.0*((phi0*(u[4] - u[5] - u[6]))/(Ls*pi))
+    i[4] = -1.0*((phi0*(u[4] - u[5] - (C2*Rλ*u[10]+u[6])))/(Ls*pi))
 
     i[5] = (1.0/(Ls*(Linp*Ls + Ls*Lλ - 2.0*Minp^2.0)*pi))*(Ib*Linp*Ls^2.0*pi + Ib*Ls^2.0*Lλ*pi + 2.0*Iin*sin(ωin*t)*Ls*Lλ*Minp*pi
         - 2.0*Ib*Ls*Minp^2.0*pi - 2.0*Linp*Ls*pi*Φe - 2.0*Ls*Lλ*pi*Φe + Ls*Minp*phi0*u[1] + Ls*Minp*phi0*u[2]
         + Linp*Ls*phi0*u[3] + Ls*Lλ*phi0*u[3] + Linp*Ls*phi0*u[4] + Ls*Lλ*phi0*u[4] - 2.0*Minp^2.0*phi0*u[4]
-        - 2.0*Linp*Ls*phi0*u[5] - 2.0*Ls*Lλ*phi0*u[5] + 2.0*Minp^2*phi0*u[5] - 2.0*Linp*Ls*phi0*u[6] - 2.0*Ls*Lλ*phi0*u[6]
-        + 2.0*Minp^2*phi0*u[6])
+        - 2.0*Linp*Ls*phi0*u[5] - 2.0*Ls*Lλ*phi0*u[5] + 2.0*Minp^2*phi0*u[5] - 2.0*Linp*Ls*phi0*(C2*Rλ*u[10]+u[6]) - 2.0*Ls*Lλ*phi0*(C2*Rλ*u[10]+u[6])
+        + 2.0*Minp^2*phi0*(C2*Rλ*u[10]+u[6]))
 
     i[6] = i[5]
 end

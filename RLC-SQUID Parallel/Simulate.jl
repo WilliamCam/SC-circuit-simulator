@@ -1,3 +1,4 @@
+
 module Simulate
 #simulation module for RLC-SQUID Parallel Configuration with low pass filter
 
@@ -96,7 +97,7 @@ function S21_single_sim(Ib::Float64, Iin::Float64, NΦ₀::Float64; N_periods = 
     # saved_values = SavedValues(Float64, Array{Float64})
     # cb = SavingCallback((u, t, integrator)->integrator(t,Val{0}), saved_values, saveat = tsaves)
 
-    sim = solve(prob_RLC_para,Vern6(), maxiters=1e9, progress=true) #solve problem
+    sim = solve(prob_RLC_para,Tsit5(), maxiters=1e9, progress=true) #solve problem
 
     Vin = Rλ * Iin .* sin.((ωλ).*sim.t) #Total available power on resonance
     Vout = phi0/(2.0*pi).*sim[1,:]
@@ -109,14 +110,14 @@ function S21_single_sim(Ib::Float64, Iin::Float64, NΦ₀::Float64; N_periods = 
 
 
 
-    graph = plot(sim.t, [Vin,Vout],
+    graph = plot(sim.t, [Vout.-mean(Vout)],
         title = "RLC-SQUID Parallel Config \n S21 parameter sim",
         xlabel = "Time (s)",
         ylabel = "Voltage (V)"
     )
     display(graph)
 
-    return  Vgain, Iout, Pgain
+    return  RMS(Vout), Igain, Pgain
 end #end S21_single_sim
 """
     flux_response(Ib::Float64, Iin::Float64; N_periods = 100, ωin = ωλ, Npoints = 200)
