@@ -7,6 +7,7 @@ using Statistics
 using Plots
 using JLD2
 using FileIO
+using Printf
 
 include("constants.jl")
 include("system.jl")
@@ -134,9 +135,19 @@ function flux_voltage(Ib::Float64, Iin::Float64; ωin = ωλ, tsim = 10*2*pi/ω�
     end #data export
     return sim
 end #flux_voltage
-
+"""
+    S21_sim(Ib::Float64, Iin::Float64, Φe::Float64;
+            δ = 0.5, tsim = 10*2*pi/ωλ, Npts = 200,
+            export_result = true, plot_result = true
+            tstart = 3*2*pi/ωλ, S21 = true
+        )
+Performs Npts transient simulations at frequencies ωλ(1-δ) to ωλ(1+δ) outputting gain if S21 = True
+or RMS output voltage if set to false. Output calculation ignores points prior to tstart.
+Exports output array to simlogs.jld2 if export_result = true
+"""
 function S21_sim(Ib::Float64, Iin::Float64, Φe::Float64;
-        δ = 0.5, tsim = 10*2*pi/ωλ, Npts = 200, export_result = true,
+        δ = 0.5, tsim = 10*2*pi/ωλ, Npts = 200,
+        export_result = true, plot_result = true,
         tstart = 3*2*pi/ωλ, S21 = true
     )
 
@@ -184,12 +195,20 @@ function S21_sim(Ib::Float64, Iin::Float64, Φe::Float64;
     sim = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Npts, maxiters=1e9, progress=true) #solve ensemble
 
     #plot result
+    if S21 == true
+        ylabel_string = "Gain"
+    else
+        ylabel_string = "Vrms (μV)"
+    end # end if statement
+
     graph = plot(f_vec/(2*pi),sim[:],
         title = "RLC-SQUID Parallel Config v2 \n Amplitude Response",
         xlabel = "Frequency (Hz)",
-        ylabel = "Averaged Vout (μVrms)"
+        ylabel = ylabel_string
     )
-    display(graph)
+    if plot_result == true
+        display(graph)
+    end #end if statement
 
     if export_result == true #export simulation result to .jld2
         label_string = "S21-" * string(p_consts.Iin*1.0e9) * "nV"
@@ -201,6 +220,67 @@ function S21_sim(Ib::Float64, Iin::Float64, Φe::Float64;
     return sim
 end #end S21_sim
 
+struct FrequencyResponseSolution
+    fvec::Vector{Float64}
+    input::Vector{Float64}
+    output::Matrix{Float64}
+end #end struct defintion
+"""
+fresp_vs_inputI(Ib::Float64, Iin::Tuple{Float64, Float64}, Φe::Float64;
+        δ = 0.5, tsim = 10*2*pi/ωλ, Npts = 200, export_result = true,
+        tstart = 3*2*pi/ωλ, S21 = true, Ntraces = 50, comment = "",
+        logscale = false
+    )
+
+Performs Ntraces number of S21_sim calculations to produce a heatmap of the
+system freuency responses vs input current.
+"""
+function fresp_vs_inputI(Ib::Float64, Iin::Tuple{Float64, Float64}, Φe::Float64;
+        δ = 0.5, tsim = 10*2*pi/ωλ, Npts = 200, export_result = true,
+        tstart = 3*2*pi/ωλ, S21 = true, Ntraces = 50, comment = "",
+        logscale = false
+    )
+    Z = zeros(Ntraces,Npts)
+
+    if logscale == true
+        Ivec = 10 .^(range(Iin[1],stop=Iin[2],length=Ntraces))
+    else
+        Ivec = LinRange(Iin[1],Iin[2],Ntraces)
+    end #end if statement
 
 
+    ini_sim = @timed S21_sim(Ib, Ivec[1], Φe, δ=δ, tsim = tsim, Npts = Npts, export_result = false, tstart = tstart, plot_result = false, S21 = S21)
+    exec_time = ini_sim[2]
+    Z[1,:] .= ini_sim[1] .* 1.0e+6
+    @printf("One trace computed in: %.2f s, simulation complete in %.2f m \n", exec_time, exec_time*(Ntraces-1)/60.0)
+    for ii in 2:Ntraces
+        @printf("Completed trace %i of %i \n", ii, Ntraces)
+        trace = S21_sim(Ib, Ivec[ii], Φe, δ=δ, tsim = tsim, Npts = Npts, export_result = false,
+        tstart = tstart, plot_result = false, S21 = S21)
+        Z[ii,:] .= trace .* 1.0e+6
+    end # end loop
+    sim = FrequencyResponseSolution((ωλ .+ ωλ.*LinRange(-δ, δ, Npts)/(2*pi)), Ivec, Z)
+
+    X = sim.fvec
+    Z = sim.output
+    if logscale == true
+        Y = 20 .*log10.(sim.input)
+        ylabel_string = "Input current (dB ?)"
+    else
+        Y = sim.input
+        ylabel_string = "Input current (A)"
+    end #end if statement
+
+    graph = heatmap(X,Y,Z,
+        xlabel = "Detuning Frequency (Hz)",
+        ylabel = ylabel_string,
+        fill = true,
+        title = "RLC-SQUID Parallel Config v2 \n Frequency Response vs Input Current",
+        colorbar_title = "Output Voltage (μV)"
+        )
+    display(graph)
+    label_string = "FreqResponse-heatmap-" * comment * string(Iin[1]) * "-"* string(Iin[2]) * "nV-"*string(Ntraces)*"traces"
+    savefig(graph, "RLC-SQUID Parallel v2\\Plots\\" * label_string * ".pdf")
+    return sim
+end #end fresp_vs_inputI
 end #end module
