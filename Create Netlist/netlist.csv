@@ -1,0 +1,4 @@
+NetList 1,Loop 0,Loop 1,Loop 2
+Loop 0,/,-J1,
+Loop 1,/,+J1+J2,-J2-5
+Loop 2,/,-J2-5,+J2+La
