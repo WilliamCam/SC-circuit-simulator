@@ -16,15 +16,6 @@ function netlist(name)
     L = zeros(Float64, 0, numLoops-1)            #🟢 
     σB = zeros(Float64, 0, numLoops)            #🟢 
 
-    println("Enter the Junctions:\n(Enter '~' when all are listed)")
-    while true
-        input = readline()
-        if (input == "~")           
-            break
-        end
-        push!(junctions, input)
-    end
-
     println("Enter any mutually coupled loops:\nE.g. if loop 1 and 2 are coupled with mutual inductance 5μA/Φ𝜊 enter\n'1,2,5'\n(Enter '~' when all are listed)")
     while true
         input = readline()
@@ -39,16 +30,13 @@ function netlist(name)
 
     for i in 1:numLoops                         #Asks about circuit elements
         push!(loops, [])
-        #write(lc, "Loop $(i-1)") #🟡
         println("Enter all components in Loop $(i-1) one by one\n(Enter '~' when all components are listed)")
         while true
             input = readline()
-            if (input == "~")
-                #write(lc, "\n")#🟡                 
+            if (input == "~")  
                 break
             end
             push!(loops[i], input)
-            #write(lc, ",$input")#🟡                #Write each component to the loops+components.csv file
         end
     end
 
@@ -122,11 +110,29 @@ function netlist(name)
         L = [L; current_row']
     end
 
+    println("Enter the Junctions:\n(Enter '~' when all are listed)\n --- This may not be necessary as im not sure if order of junctions matters ---")
+    while true  ### ADD CHECK TO ENSURE USER INPUT JUNCTIONS EXIST IN THE CIRCUIT
+        input = readline()
+        if (input == "~")           
+            break
+        end
+        push!(junctions, input)
+    end
+
     for i in 1:length(junctions)
         current_row = []
         for j in 1:numLoops
             if junctions[i] in loops[j]
-                push!(current_row, 1)
+                junc_loops = get(componentLoopDict, junctions[i], -1)
+                loop_count = 0
+                for n in 1:length(junc_loops)
+                    loop_count = loop_count + junc_loops[n]
+                end
+                if (loop_count/length(junc_loops) >= (j-1))
+                    push!(current_row, -1)
+                else
+                    push!(current_row, 1)
+                end
             else
                 push!(current_row, 0)
             end
@@ -147,6 +153,7 @@ function netlist(name)
     jldopen("$(name).jld2", "w") do file
         file["editing/loops"] = loops
         file["editing/parameters"] = componentParamDict
+        file["editing/component-loop-dict"] = componentLoopDict
         file["matrices/L"] = L
         file["matrices/σA"] = σA
         file["matrices/σB"] = σB
