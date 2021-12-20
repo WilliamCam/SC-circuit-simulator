@@ -1,3 +1,4 @@
+kristijan-gen-netlist
 using JLD2, FileIO
 
 function process_netlist(name)
@@ -100,6 +101,7 @@ function new_netlist(name)
 
     for i in 1:numLoops                         #Asks about circuit elements
         push!(loops, [])
+kristijan-gen-netlist
         println("Enter all components in Loop $(i-1) one by one\n(Enter '~' when all components are listed)")
         while true
             input = readline()
