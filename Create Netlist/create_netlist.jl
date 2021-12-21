@@ -74,15 +74,64 @@ function process_netlist(name)
     close(file)
 end
 
+function find_components(numLoops, loops)
+    componentLoopDict = Dict()                  #Dictionary with components as keys and loops as values (used to find unique elements)
+    componentParamDict = Dict()                 #Dictionary with components as keys and parameters as values 🟢
+    junctions = []                              #Stores the names of the junctions
+
+    for i in 1:numLoops                    #Iterate through all loops to find unique circuit components      
+        #jj_count = 0
+        for j in 1:length(loops[i])             #Iterate components in current loop
+            #if (loops[i][j][1] == 'J')             #Count Josephson Junctions in current loop 🔴
+                #jj_count = jj_count + 1
+            #end
+            componentLoopDict[loops[i][j]]=push!(get(componentLoopDict, loops[i][j], []), i-1) #Creates dict with unique circuit elements
+        end
+        #if (jj_count > 1)                       #If current loop has more than one Josephson Junction it is a SQUID loop... is this important? 🔴
+        #    push!(squidLoops, i-1)
+        #end
+    end
+
+    for comp in keys(componentLoopDict)         #Finds circiut component parameters
+        if (comp[1] == 'R')
+            push!(junctions, comp)
+            println("What is the resistance of $comp?")
+            input = readline()
+            componentParamDict[comp]=input#push!(get(componentParamDict, comp, []), input)
+        elseif (comp[1] == 'C')
+            push!(junctions, comp)
+            println("What is the capacitance of $comp?")
+            input = readline()
+            componentParamDict[comp]=input
+        elseif (comp[1] == 'L')
+            println("What is the inductance of $comp?")
+            input = readline()
+            componentParamDict[comp]=input
+        elseif (comp[1] == 'J')                                      #critical current, shunt resistance, and shunt capacitance needed for [Io] [G] [C]
+            push!(junctions, comp)
+            #=println("What is the critical current of $comp?")
+            input = readline()
+            componentParamDict[comp]=input
+            println("What is the shunt resistance of $comp?")
+            input = readline()
+            componentParamDict[comp]=input
+            println("What is the Stewart-McCumber parameter for $comp?")
+            input = readline()
+            componentParamDict[comp]=input=#
+            println("What is the inductance for $comp?")
+            input = readline()
+            componentParamDict[comp]=input
+        end
+    end
+    return componentLoopDict, componentParamDict, junctions
+end
+
 function new_netlist(name)
     file = jldopen("$name.jld2", "w")
 
     loops = []                                  #Stores components in each loop as array of array (MATRIX) 🟢
-    componentLoopDict = Dict()                  #Dictionary with components as keys and loops as values (used to find unique elements)
-    componentParamDict = Dict()                 #Dictionary with components as keys and parameters as values 🟢
-    squidLoops = []                             #Maybe uneccessary 🔴
+    #squidLoops = []                             #Maybe uneccessary 🔴
     mutualInd = []                              #Stores data regarding which loops are mutally coupled 🟢
-    junctions = []                              #Stores the names of the junctions
     extern_flux = []                            #Stores loops which have external flux 🟢
 
     println("Enter the number of loops in the circuit:")
@@ -113,56 +162,16 @@ function new_netlist(name)
         end
     end
 
-    for i in 1:numLoops                    #Iterate through all loops to find unique circuit elements      
-        jj_count = 0
-        for j in 1:length(loops[i])             #Iterate components in current loop
-            if (loops[i][j][1] == 'J')             #Count Josephson Junctions in current loop 🔴
-                jj_count = jj_count + 1
-            end
-            componentLoopDict[loops[i][j]]=push!(get(componentLoopDict, loops[i][j], []), i-1) #Creates dict with unique circuit elements
-        end
-        if (jj_count > 1)                       #If current loop has more than one Josephson Junction it is a SQUID loop... is this important? 🔴
-            push!(squidLoops, i-1)
-        end
-    end
+    componentLoopDict, componentParamDict, junctions = find_components(numLoops, loops)
 
-    for comp in keys(componentLoopDict)         #Finds circiut component parameters
-        if (comp[1] == 'R')
-            println("What is the resistance of $comp?")
-            input = readline()
-            componentParamDict[comp]=input#push!(get(componentParamDict, comp, []), input)
-        elseif (comp[1] == 'C')
-            println("What is the capacitance of $comp?")
-            input = readline()
-            componentParamDict[comp]=input
-        elseif (comp[1] == 'L')
-            println("What is the inductance of $comp?")
-            input = readline()
-            componentParamDict[comp]=input
-        elseif (comp[1] == 'J')                                      #critical current, shunt resistance, and shunt capacitance needed for [Io] [G] [C]
-            #=println("What is the critical current of $comp?")
-            input = readline()
-            componentParamDict[comp]=input
-            println("What is the shunt resistance of $comp?")
-            input = readline()
-            componentParamDict[comp]=input
-            println("What is the Stewart-McCumber parameter for $comp?")
-            input = readline()
-            componentParamDict[comp]=input=#
-            println("What is the inductance for $comp?")
-            input = readline()
-            componentParamDict[comp]=input
-        end
-    end
-
-    println("Enter the Junctions:\n(Enter '~' when all are listed)\n --- This may not be necessary as im not sure if order of junctions matters ---")
+    #=println("Enter the Junctions:\n(Enter '~' when all are listed)\n --- This may not be necessary as im not sure if order of junctions matters ---")
     while true  ### ADD CHECK TO ENSURE USER INPUT JUNCTIONS EXIST IN THE CIRCUIT
         input = readline()
         if (input == "~")           
             break
         end
         push!(junctions, input)
-    end
+    end=#
 
     println("Enter the external flux through each loop:\nE.g. if there are 3 loops (0, 1, 2) and 0.6 of the external flux passes through loop 1 and the remaining flux passes through loop 2 enter \n'0-0.6-0.4'")
     input = readline()
@@ -185,7 +194,20 @@ function new_netlist(name)
 end
 
 function edit_netlist(name)
-    file = jldopen("$name.jld2", "a+")
+    file = jldopen("$name.jld2", "r+") #Open file to retrieve data
+
+    numLoops = read(file, "editing/numLoops")
+    componentLoopDict = read(file, "editing/componentLoopDict")
+    componentParamDict = read(file, "editing/componentParamDict")
+    mutualInd = read(file, "editing/mutualInd")
+    junctions = read(file, "editing/junctions")
+    loops = read(file, "editing/loops")
+    k = read(file, "matrices/k")
+
+    close(file)
+
+    file = jldopen("$name.jld2", "w") #Open file to write new data
+    
     while true
         println("What would you like to edit?")
         println(" --- Enter P to change component parameters ---")
@@ -198,7 +220,6 @@ function edit_netlist(name)
             break
         end
         if (uppercase(input) == "P")
-            componentParamDict = read(file, "editing/componentParamDict")
             while true
                 display(componentParamDict)
                 println()
@@ -215,7 +236,6 @@ function edit_netlist(name)
                 end
             end
         elseif (uppercase(input) == "L")
-            loops = read(file, "editing/loops")
             while true
                 for i in 1:length(loops)
                     println("Loop $(i-1): $(loops[i])")
@@ -239,8 +259,8 @@ function edit_netlist(name)
                     end
                 end
             end
+            componentLoopDict, componentParamDict, junctions = find_components(numLoops, loops)
         elseif (uppercase(input) == "M")
-            mutualInd = read(file, "editing/mutualInd")
             while true
                 display(mutualInd)
                 println()
@@ -259,7 +279,6 @@ function edit_netlist(name)
                 end
             end
         elseif (uppercase(input) == "K")
-            k = read(file, "matrices/k")
             display(k)
             println()
             println("Enter the new external flux through each loop:\nE.g. if there are 3 loops (0, 1, 2) and 0.6 of the external flux passes through loop 1 and the remaining flux passes through loop 2 enter \n'0-0.6-0.4'")
@@ -274,9 +293,24 @@ function edit_netlist(name)
         end
     end
 
+    file["editing/loops"] = loops
+    file["editing/componentParamDict"] = componentParamDict
+    file["editing/componentLoopDict"] = componentLoopDict
+    file["editing/junctions"] = junctions
+    file["editing/numLoops"] = numLoops
+    file["editing/mutualInd"] = mutualInd
+    file["matrices/k"] = k
+
     close(file)
+
+    process_netlist(name)
 end
 
-#new_netlist("test")
-#process_netlist("test")
-edit_netlist("test")
+println(" --- Enter 'E' to edit an existing netlist  --- ")
+println(" --- Enter 'N' to create new netlist  --- ")
+input = readline()
+if (uppercase(input) == "E")
+    edit_netlist("test")
+elseif (uppercase(input) == "N")
+    new_netlist("test")
+end
