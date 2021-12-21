@@ -1,13 +1,14 @@
 using JLD2, FileIO
 
 function process_netlist(name)
+    file = jldopen("$name.jld2", "a+")
 
-    numLoops = load("$(name).jld2", "editing/numLoops")
-    componentLoopDict = load("$(name).jld2", "editing/componentLoopDict")
-    componentParamDict = load("$(name).jld2", "editing/componentParamDict")
-    mutualInd = load("$(name).jld2", "editing/mutualInd")
-    junctions = load("$(name).jld2", "editing/junctions")
-    loops = load("$(name).jld2", "editing/loops")
+    numLoops = read(file, "editing/numLoops")
+    componentLoopDict = read(file, "editing/componentLoopDict")
+    componentParamDict = read(file, "editing/componentParamDict")
+    mutualInd = read(file, "editing/mutualInd")
+    junctions = read(file, "editing/junctions")
+    loops = read(file, "editing/loops")
 
     L = zeros(Float64, 0, numLoops-1)            #🟢 
     σB = zeros(Float64, 0, numLoops)            #🟢 
@@ -23,9 +24,9 @@ function process_netlist(name)
                 if ((n[1] == 'J') || (n[1] == 'L')) #Merge if statemets??
                     if (j-1 in get(componentLoopDict, n, -1))   #If component n is in the loop j
                         if (i == j)             #Positive/Negative <--- Needs to be checked
-                            temp_float = temp_float + parse(Float64, get(componentParamDict, n, -1)[1])
+                            temp_float = temp_float + parse(Float64, get(componentParamDict, n, -1))
                         else
-                            temp_float = temp_float - parse(Float64, get(componentParamDict, n, -1)[1])
+                            temp_float = temp_float - parse(Float64, get(componentParamDict, n, -1))
                         end
                     end
                 end
@@ -66,14 +67,16 @@ function process_netlist(name)
     L = transpose(L)
     σA = transpose(σB[:, [2,end]])
 
-    jldopen("$(name).jld2", "a+") do file
-        file["matrices/L"] = L
-        file["matrices/σA"] = σA
-        file["matrices/σB"] = σB
-    end
+    file["matrices/L"] = L
+    file["matrices/σA"] = σA
+    file["matrices/σB"] = σB
+
+    close(file)
 end
 
 function new_netlist(name)
+    file = jldopen("$name.jld2", "w")
+
     loops = []                                  #Stores components in each loop as array of array (MATRIX) 🟢
     componentLoopDict = Dict()                  #Dictionary with components as keys and loops as values (used to find unique elements)
     componentParamDict = Dict()                 #Dictionary with components as keys and parameters as values 🟢
@@ -127,28 +130,28 @@ function new_netlist(name)
         if (comp[1] == 'R')
             println("What is the resistance of $comp?")
             input = readline()
-            componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
+            componentParamDict[comp]=input#push!(get(componentParamDict, comp, []), input)
         elseif (comp[1] == 'C')
             println("What is the capacitance of $comp?")
             input = readline()
-            componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
+            componentParamDict[comp]=input
         elseif (comp[1] == 'L')
             println("What is the inductance of $comp?")
             input = readline()
-            componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
+            componentParamDict[comp]=input
         elseif (comp[1] == 'J')                                      #critical current, shunt resistance, and shunt capacitance needed for [Io] [G] [C]
             #=println("What is the critical current of $comp?")
             input = readline()
-            componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
+            componentParamDict[comp]=input
             println("What is the shunt resistance of $comp?")
             input = readline()
-            componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
+            componentParamDict[comp]=input
             println("What is the Stewart-McCumber parameter for $comp?")
             input = readline()
-            componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)=#
+            componentParamDict[comp]=input=#
             println("What is the inductance for $comp?")
             input = readline()
-            componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
+            componentParamDict[comp]=input
         end
     end
 
@@ -168,17 +171,112 @@ function new_netlist(name)
         push!(extern_flux, parse(Float64, flux[i]))
     end
 
-    jldopen("$(name).jld2", "w") do file
-        file["editing/loops"] = loops
-        file["editing/componentParamDict"] = componentParamDict
-        file["editing/componentLoopDict"] = componentLoopDict
-        file["editing/junctions"] = junctions
-        file["editing/numLoops"] = numLoops
-        file["editing/mutualInd"] = mutualInd
-        file["matrices/k"] = extern_flux
-    end
+    file["editing/loops"] = loops
+    file["editing/componentParamDict"] = componentParamDict
+    file["editing/componentLoopDict"] = componentLoopDict
+    file["editing/junctions"] = junctions
+    file["editing/numLoops"] = numLoops
+    file["editing/mutualInd"] = mutualInd
+    file["matrices/k"] = extern_flux
+
+    close(file)
 
     process_netlist(name)
 end
 
-new_netlist("test")
+function edit_netlist(name)
+    file = jldopen("$name.jld2", "a+")
+    while true
+        println("What would you like to edit?")
+        println(" --- Enter P to change component parameters ---")
+        println(" --- Enter L to change components in loops ---")
+        println(" --- Enter M to change mutally coupled loops ---")
+        println(" --- Enter K to change external flux through loops ---")
+        println(" --- Enter ~ when finished editing ---")
+        input = readline()
+        if (input == "~")
+            break
+        end
+        if (uppercase(input) == "P")
+            componentParamDict = read(file, "editing/componentParamDict")
+            while true
+                display(componentParamDict)
+                println()
+                println("Enter a component followed by '-' followed by it's new parameter. E.g. to change Ra from 2 Ohm to 3 Ohm enter Ra-3\nEnter ~ when finished editing parameters")
+                input = readline()
+                if (input == "~")
+                    break
+                end
+                comp_param = split(input, '-')
+                if (comp_param[1] in keys(componentParamDict))
+                    componentParamDict[comp_param[1]] = comp_param[2]
+                else
+                    println("Component does not exist, try agian")
+                end
+            end
+        elseif (uppercase(input) == "L")
+            loops = read(file, "editing/loops")
+            while true
+                for i in 1:length(loops)
+                    println("Loop $(i-1): $(loops[i])")
+                end
+                println("Which loop would you like to edit?\nEnter ~ when finished editing loops")
+                input = readline()
+                if (input == "~")
+                    break
+                end
+                loop_num = parse(Int8, input)+1
+                while true
+                    println(loops[loop_num])
+                    println("Enter a component in the loop to remove it, enter a new component to add it to the loop\nEnter ~ when finished editing loop $(loop_num-1)")
+                    input = readline()
+                    if (input == "~")
+                        break
+                    elseif (input in loops[loop_num])
+                        deleteat!(loops[loop_num], findall(x->x==input,loops[loop_num]))
+                    else
+                        push!(loops[loop_num], input)
+                    end
+                end
+            end
+        elseif (uppercase(input) == "M")
+            mutualInd = read(file, "editing/mutualInd")
+            while true
+                display(mutualInd)
+                println()
+                println("Enter existing mutually coupled loops to remove, enter new mutually coupled loops to add\nEnter ~ when finished editing mutally coupled loops")
+                input = readline()
+                if (input == "~")
+                    break
+                end
+                currentMutual = split(input, ',')
+                mutualTuple = (parse(Int8, currentMutual[1]), parse(Int8, currentMutual[2]))
+                mutualTuple = (mutualTuple, parse(Float64, currentMutual[3]))
+                if (mutualTuple in mutualInd)
+                    deleteat!(mutualInd, findall(x->x==mutualTuple,mutualInd))
+                else
+                    push!(mutualInd, mutualTuple)
+                end
+            end
+        elseif (uppercase(input) == "K")
+            k = read(file, "matrices/k")
+            display(k)
+            println()
+            println("Enter the new external flux through each loop:\nE.g. if there are 3 loops (0, 1, 2) and 0.6 of the external flux passes through loop 1 and the remaining flux passes through loop 2 enter \n'0-0.6-0.4'")
+            input = readline()
+            k = []
+            flux = split(input, '-')
+            for i in 1:length(flux)
+                push!(k, parse(Float64, flux[i]))
+            end
+            display(k)
+            println()
+        end
+    end
+
+    close(file)
+end
+
+#new_netlist("test")
+#process_netlist("test")
+edit_netlist("test")
