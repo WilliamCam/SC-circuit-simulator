@@ -3,9 +3,16 @@ const Φ₀ = 2.067833848e-15 #flux quantum
 
 
 @variables t #time variable
+D = Differential(t)
+D2 = Differential(t)^2
 
- function build_component(;name) #general component with phase and current states
+function build_component(;name) #general component with phase and current states
     sts = @variables θ(t)=1.0 i(t)=1.0
+    ODESystem(Equation[], t, sts, []; name=name)
+end
+
+function build_JJ_component(;name) #general component with phase and current states
+    sts = @variables θ(t)=1.0 i(t)=1.0 RHS(t)=1.0
     ODESystem(Equation[], t, sts, []; name=name)
 end
 
@@ -13,12 +20,10 @@ struct Component
     sys::ODESystem
 end
 
-
 function build_resistor(;name, R = 1.0) #Builds ODESystem for resistor using Component
     @named component = build_component()
     @unpack θ, i = component
     ps = @parameters R=R
-    D = Differential(t)
     eqs = [
             #i~*D(θ)*Φ₀/(2*pi*R)
             D(θ)~i*(2*pi*R)/Φ₀,
@@ -31,8 +36,6 @@ function build_capacitor(;name, C = 1.0) #builds ODESystem for capacitor using C
     @named component = build_component()
     @unpack θ, i = component
     ps = @parameters C=C
-    D = Differential(t)
-    D2 = Differential(t)^2
     eqs = [
             #i~D(D(θ))*(Φ₀*C)/(2*pi)
             D2(θ)~i*2*pi/(Φ₀*C)
@@ -41,25 +44,23 @@ function build_capacitor(;name, C = 1.0) #builds ODESystem for capacitor using C
     Component(sys)
 end
 
-#=function build_JJ(;name, C = 1.0) #builds ODESystem for JosephsonJunction using Component
-    @named component = build_component()
-    @unpack θ, i = component
+function build_JJ(;name, Io = 1.0, R = 1.0, C = 1.0) #builds ODESystem for JosephsonJunction using Component
+    @named component = build_JJ_component()
+    @unpack θ, i, RHS = component
     ps = @parameters C=C
-    D = Differential(t)
-    D2 = Differential(t)^2
     eqs = [
             #i~D(D(θ))*(Φ₀*C)/(2*pi)
-            D2(θ)~i*2*pi/(Φ₀*C)
+            D(θ) ~ (i - Io*sin(θ) - RHS)*(2*pi*R)/Φ₀
+            D2(θ) ~ RHS*(2*pi)/(Φ₀*C)
           ]
     sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
     Component(sys)
-end=#
+end
 
 function build_voltage_source(;name, V = 1.0)
     @named component = build_component()
     @unpack θ, i = component
     ps = @parameters V=V
-    D = Differential(t)
     eqs = [
             D(θ)~ - V*2*pi/Φ₀
           ]
@@ -113,7 +114,7 @@ function add_loop!(
            end
        end=##
 
-    push!(eqs,dot([Φ₀/(2*pi)*c.sys.θ for c in cs],σ) ~ l.sys.Φₑ-l.sys.Φₗ)
+    push!(eqs,dot([Φ₀/(2*pi)*c.sys.θ for (n, c) in cs],σ) ~ l.sys.Φₑ-l.sys.Φₗ)
 
     #=for cFlow in setdiff(new_cs,branched_cs)
         push!(eqs, cFlow.σ*cFlow.c.sys.i~l.sys.iₘ)

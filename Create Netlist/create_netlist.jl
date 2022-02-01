@@ -115,20 +115,20 @@ function find_components(numLoops, loops)
             println("What is the inductance of $comp?")
             input = readline()
             componentParamDict[comp]=input
-        elseif (comp[1] == 'J')                                      #critical current, shunt resistance, and shunt capacitance needed for [Io] [G] [C]
+        elseif (comp[1] == 'J')
             push!(junctions, comp)
-            #=println("What is the critical current of $comp?")
+            println("What is the critical current of $comp?")
             input = readline()
-            componentParamDict[comp]=input
+            componentParamDict[comp]=[input]
             println("What is the shunt resistance of $comp?")
             input = readline()
-            componentParamDict[comp]=input
+            componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
             println("What is the Stewart-McCumber parameter for $comp?")
             input = readline()
-            componentParamDict[comp]=input=#
+            componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
             println("What is the inductance for $comp?")
             input = readline()
-            componentParamDict[comp]=input
+            componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
         end
     end
     return componentLoopDict, componentParamDict, junctions
