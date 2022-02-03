@@ -16,8 +16,8 @@ componentPhaseDirection = load(f_name, "matrices/componentPhaseDirection")
 L = load(f_name, "matrices/L")
 close(file)
 
-CPD["J1"] = [10.0e-6, 10, 3.2910597840193506e-14, 1]
-#CPD
+CPD["J1"] = [1.0, 10, 3.2910597840193506e-14, 1]
+CPD["V1"] = 1.0e-6
 #phi0 = 2.067833848e-15
 #I₀₁ = 10.0e-6
 #Gj1 = 1/10
@@ -59,7 +59,7 @@ for j in junctions
         built_components[j] = new_c
     elseif (j[1] == 'J')
         params = get(CPD, j, 0)
-        new_c = "@named $j = build_JJ(Io = $(params[1]), R = $(params[2]), C = $(params[3]))"
+        new_c = "@named $j = build_JJ(I0 = $(params[1]), R = $(params[2]), C = $(params[3]))"
         new_c = Meta.parse(new_c)
         new_c = eval(new_c)
         built_components[j] = new_c
@@ -121,19 +121,16 @@ end
 
 new_model = structural_simplify(model)
 
-new_new_model = ode_order_lowering(new_model)
 
 for eq in new_new_model.eqs
     println()
     println(eq)
 end
 
-my_u0
-
 tspan = (0.0,1e-9)
 tsaves = LinRange(tspan[1],tspan[2], 5000)
 prob = ODEProblem(new_model, my_u0, tspan, saveat=tsaves)
-sol = solve(prob, Rodas4())#, maxiters=1e6, abstol = 1e-9, reltol=1e-12)
+sol = solve(prob, ROS3P())#, maxiters=1e6, abstol = 1e-9, reltol=1e-12)
 
 plot(sol, vars=[J1.sys.i])
 #plot(sol, vars=[D(J1.sys.θ)])
