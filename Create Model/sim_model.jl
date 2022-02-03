@@ -97,18 +97,7 @@ for loop in built_loops
     push!(old_sys, loop.sys)
 end
 
-my_u0
-
 sys = Vector{ODESystem}(old_sys)
-
-#σA
-#σA[1,:]
-#σA[2,:]
-
-#built_components
-#for (n, c) in built_components
-#    println(n)
-#end
 
 current_flow(eqs, componentPhaseDirection, built_loops, built_components)
 for i in 1:numLoops
@@ -121,17 +110,15 @@ end
 
 new_model = structural_simplify(model)
 
+tspan_ini = (0.0,1e-6)
 
-for eq in new_new_model.eqs
-    println()
-    println(eq)
-end
+prob = ODEProblem(new_model, my_u0, tspan_ini, save_everystep = false, progress=true)
+sol = solve(prob, ROS3P())
+u0 = sol[:,end]
 
-tspan = (0.0,1e-9)
-tsaves = LinRange(tspan[1],tspan[2], 5000)
-prob = ODEProblem(new_model, my_u0, tspan, saveat=tsaves)
-sol = solve(prob, ROS3P())#, maxiters=1e6, abstol = 1e-9, reltol=1e-12)
+tspan = (0.0,1e-8)
+tsaves = LinRange(tspan[1],tspan[2], 50000)
+prob = ODEProblem(new_model, u0, tspan, saveat=tsaves, progress=true)
+sol = solve(prob, ROS3P())
 
 plot(sol, vars=[J1.sys.i])
-#plot(sol, vars=[D(J1.sys.θ)])
-#plot(sol.t, (Φ₀/2*pi)*sol[D(C1.sys.θ)])
