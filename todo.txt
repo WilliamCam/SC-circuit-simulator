@@ -4,6 +4,10 @@
 - User input in sim_model.jl, e.g. time span to solve for, component to plot...
 - Update README and comments
 
-
-
 - Non planar circuits
+
+BENCHMARKING
+CLEANING UP CODE - PRESENTABLE
+AC CURRENT/ VOLTAGE SOURCE
+PARALLEL ENSEMBELE 
+CURRENT SOURCE AS COMPONENT WITH DIRECTIONS IN EQS RELATING TO CURRENT SOURCES
