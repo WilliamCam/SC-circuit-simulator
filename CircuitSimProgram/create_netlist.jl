@@ -10,24 +10,29 @@ function process_netlist(name)
     junctions = read(file, "editing/junctions")
     loops = read(file, "editing/loops")
 
-    L = zeros(Float64, 0, numLoops-1)            #🟢 
+    L = zeros(Float64, 1, numLoops)            #🟢 
     σB = zeros(Float64, 0, numLoops)            #🟢
     componentPhaseDirection = Dict() 
 
     ### Algorithm for finding L
-    for j in 1:numLoops                         #First iteration to find the self and mutal inductance of all loops
+    for j in 2:numLoops                         #First iteration to find the self and mutal inductance of all loops
         current_row = []
-        for i in 2:numLoops                     #Second iteration to go through loop 1 to i for each and every loop 
+        for i in 1:numLoops                     #Second iteration to go through loop 1 to i for each and every loop 
     #                                           ^--- suspect matrix symmetry - better performance with "for i in j:numLoops"
             temp_float = 0.0
             #SELF COUPLING
             for n in loops[i]                   #Third iteration to go through the components in loop 1
                 if ((n[1] == 'J') || (n[1] == 'L')) #Merge if statemets??
                     if (j-1 in get(componentLoopDict, n, -1))   #If component n is in the loop j
+                        if (n[1] == 'J')
+                            param = parse(Float64, get(componentParamDict, n, 0)[4])
+                        elseif (n[1] == 'L')
+                            param = parse(Float64, get(componentParamDict, n, 0))
+                        end
                         if (i == j)             #Positive/Negative <--- Needs to be checked
-                            temp_float = temp_float + parse(Float64, get(componentParamDict, n, 0))
+                            temp_float = temp_float + param
                         else
-                            temp_float = temp_float - parse(Float64, get(componentParamDict, n, 0))
+                            temp_float = temp_float - param
                         end
                     end
                 end
@@ -69,6 +74,14 @@ function process_netlist(name)
     L = transpose(L)
     σA = transpose(σB)
 
+    #=
+    println(L)
+    println(σA)
+    println(σB)
+    println(componentPhaseDirection)
+    =#
+
+
     file["matrices/L"] = L
     file["matrices/σA"] = σA
     file["matrices/σB"] = σB
@@ -101,6 +114,10 @@ function find_components(numLoops, loops)
             println("What is the Voltage of $comp?")
             input = readline()
             componentParamDict[comp]=input
+        elseif (comp[1] == 'I')
+            println("What is the current through $comp?")
+            input = readline()
+            componentParamDict[comp]=input
         elseif (comp[1] == 'R')
             push!(junctions, comp)
             println("What is the resistance of $comp?")
@@ -123,10 +140,10 @@ function find_components(numLoops, loops)
             println("What is the shunt resistance of $comp?")
             input = readline()
             componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
-            println("What is the Stewart-McCumber parameter for $comp?")
+            println("What is the capacitance of $comp?")
             input = readline()
             componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
-            println("What is the inductance for $comp?")
+            println("What is the inductance of $comp?")
             input = readline()
             componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
         end
@@ -138,13 +155,19 @@ function new_netlist(name)
     file = jldopen("$name.jld2", "w")
 
     loops = []                                  #Stores components in each loop as array of array (MATRIX) 🟢
-    #squidLoops = []                             #Maybe uneccessary 🔴
     mutualInd = []                              #Stores data regarding which loops are mutally coupled 🟢
     extern_flux = []                            #Stores loops which have external flux 🟢
 
-    println("Enter the number of loops in the circuit:")
-    numLoops = readline()
-    numLoops = parse(Int8, numLoops)             #Store number of Loops as an int
+    numLoops = 0
+    while numLoops == 0
+        println("Enter the number of loops in the circuit:")
+        input = readline()
+        try
+            numLoops = parse(Int8, input)       #Store number of Loops as an int
+        catch
+            println(" --- Incorrect input type, number of loops must be an integer ---")
+        end
+    end            
 
     println("Enter any mutually coupled loops:\nE.g. if loop 1 and 2 are coupled with mutual inductance 5μA/Φ𝜊 enter\n'1,2,5'\n(Enter '~' when all are listed)")
     while true
@@ -152,10 +175,21 @@ function new_netlist(name)
         if (input == "~")           
             break
         end
-        currentMutual = split(input, ',')
-        mutualTuple = (parse(Int8, currentMutual[1]), parse(Int8, currentMutual[2]))
-        mutualTuple = (mutualTuple, parse(Float64, currentMutual[3]))
-        push!(mutualInd, mutualTuple)
+        try
+            currentMutual = split(input, ',')
+            if (length(currentMutual) != 3)
+                throw(error)
+            end
+            mutualTuple = (parse(Int8, currentMutual[1]), parse(Int8, currentMutual[2]))
+            mutualTuple = (mutualTuple, parse(Float64, currentMutual[3]))
+            push!(mutualInd, mutualTuple)
+        catch e
+            if isa(e, ArgumentError)
+                println(" --- One or more variable types are incorrect, loops must be Int and inductance must be Float ---")
+            elseif e == error
+                println(" --- Incorrect input length, enter 3 values seperated by commas ---")
+            end
+        end
     end
 
     for i in 1:numLoops                         #Asks about circuit elements
@@ -165,8 +199,15 @@ function new_netlist(name)
             input = readline()
             if (input == "~")  
                 break
+            elseif (input in loops[i])
+                println(" --- This component has already been added to this loop ---")
+                println("Enter all components in Loop $(i-1) one by one\n(Enter '~' when all components are listed)")
+            elseif !(input[1] in ['C', 'I', 'J', 'L', 'R', 'V'])
+                println(" --- Please name components starting with C, I, J, L, R, or V to indentify component type (Check readme.txt) ---")
+                println("Enter all components in Loop $(i-1) one by one\n(Enter '~' when all components are listed)")
+            else
+                push!(loops[i], input)
             end
-            push!(loops[i], input)
         end
     end
 
@@ -181,7 +222,7 @@ function new_netlist(name)
         push!(junctions, input)
     end=#
     
-    println("Enter the external flux through each loop:\nE.g. if there are 3 loops (0, 1, 2) and 0.6 of the external flux passes through loop 1 and the remaining flux passes through loop 2 enter \n'0.6-0.4'\nDo NOT enter the 0th (Ib) Loop")
+    println("Enter the external flux through each loop:\nE.g. if there are 3 loops (0, 1, 2) and 0.6 of the external flux passes through loop 1 and the remaining flux passes through loop 2 enter \n'0-0.6-0.4'")
     input = readline()
     if (input != "")
         flux = split(input, '-')
@@ -291,7 +332,7 @@ function edit_netlist(name)
         elseif (uppercase(input) == "K")
             display(k)
             println()
-            println("Enter the new external flux through each loop:\nE.g. if there are 3 loops (0, 1, 2) and 0.6 of the external flux passes through loop 1 and the remaining flux passes through loop 2 enter \n'0.6-0.4'\nDo NOT enter the 0th (Ib) Loop")
+            println("Enter the new external flux through each loop:\nE.g. if there are 3 loops (0, 1, 2) and 0.6 of the external flux passes through loop 1 and the remaining flux passes through loop 2 enter \n'0-0.6-0.4'")
             input = readline()
             k = []
             flux = split(input, '-')
@@ -316,15 +357,27 @@ function edit_netlist(name)
     process_netlist(name)
 end
 
-println(" --- Enter 'E' to edit an existing netlist  --- ")
-println(" --- Enter 'N' to create new netlist  --- ")
-input = readline()
-if (uppercase(input) == "E")
-    println(" --- Enter filename (excluding '.jld2')  --- ")
+function startup()
+    println(" --- Enter 'E' to edit an existing netlist  --- ")
+    println(" --- Enter 'N' to create new netlist  --- ")
+    println(" --- Enter '~' to exit program  --- ")
     input = readline()
-    edit_netlist("$input")
-elseif (uppercase(input) == "N")
-    println(" --- Enter filename (excluding '.jld2')  --- ")
-    input = readline()
-    new_netlist("$input")
+    if (uppercase(input) == "E")
+        println(" --- Enter filename (excluding '.jld2')  --- ")
+        input = readline()  #check if file exists
+        edit_netlist("$input")
+        startup()
+    elseif (uppercase(input) == "N")
+        println(" --- Enter filename (excluding '.jld2')  --- ")
+        input = readline()
+        new_netlist("$input")
+        startup()
+    elseif (input == "~")
+        exit()
+    else 
+        print(" --- Invalid input, try again ---")
+        startup()
+    end
 end
+
+startup()
