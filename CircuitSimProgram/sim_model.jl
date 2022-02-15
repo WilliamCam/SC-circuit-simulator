@@ -1,63 +1,79 @@
 using JLD2, FileIO, ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra
 include("model_builder.jl")
 
-while true
-    fail = true
-    f_name = ""
-    while fail
-        println(" --- Enter filename (excluding '.jld2')  --- ")
-        input = readline()
-        f_name = "$input.jld2"
-        fail = false
-        try
+function open_file(name)
+    global f_name = name
+    try
+        if endswith(f_name, ".jld2")
             file = jldopen(f_name, "r")
-            close(file)
-        catch e
-            if isa(e, SystemError)
-                println("File does not exist")
-                fail = true
+        else 
+            file = jldopen("$f_name.jld2", "r")
+        end
+    catch e
+        if isa(e, SystemError)
+            println("File does not exist")
+        end
+        #break?
+    end
+    if endswith(f_name, ".jld2")
+        file = jldopen(f_name, "r")
+    else 
+        file = jldopen("$f_name.jld2", "r")
+    end
+    #file = jldopen("$f_name.jld2", "r")
+    global numLoops = read(file, "editing/numLoops")
+    global componentLoopDict = read(file, "editing/componentLoopDict")
+    global CPD = read(file, "editing/componentParamDict")
+    global mutualInd = read(file, "editing/mutualInd")
+    global junctions = read(file, "editing/junctions")
+    global loops = read(file, "editing/loops")
+    global k = read(file, "matrices/k")
+    global L = read(file, "matrices/L")
+    global σA = read(file, "matrices/σA")
+    global σB = read(file, "matrices/σB")
+    global componentPhaseDirection = read(file, "matrices/componentPhaseDirection")
+    close(file)
+end
+
+### Ask user to input any variables that are still in symbolic form
+function symbolic_assign()
+    symbolDict = Dict()
+    for comp in CPD
+        if (comp[1][1] == 'J')
+            for i in 1:3
+                if isa(comp[2][i], Symbol)
+                    symbolDict[comp[2][i]] = push!(get(symbolDict, comp[2][i], []), (comp[1], i))
+                end
+            end
+        else
+            if isa(comp[2], Symbol)
+                symbolDict[comp[2]] = push!(get(symbolDict, comp[2], []), comp[1])
             end
         end
     end
-    loops = load(f_name, "editing/loops")
-    CPD = load(f_name, "editing/componentParamDict")
-    CLD = load(f_name, "editing/componentLoopDict")
-    junctions = load(f_name, "editing/junctions")
-    numLoops = load(f_name, "editing/numLoops")
-    mutualInd = load(f_name, "editing/mutualInd")
-    k = load(f_name, "matrices/k")
-    σB = load(f_name, "matrices/σB")
-    componentPhaseDirection = load(f_name, "matrices/componentPhaseDirection")
-    σA = load(f_name, "matrices/σA")
-    L = load(f_name, "matrices/L")
+    for sym in symbolDict
+        println("Please enter a value for $(sym[1])")
+        input = readline()
+        for i in sym[2]
+            if isa(i, Tuple)
+                CPD[i[1]][i[2]] = parse(Float64, input)
+            else
+                CPD[i] = input
+            end
+        end
+    end
+end
 
-    #L
-    #L[2,:]
-
-
-    #CPD["Ib"] = 19e-6
-    #CPD
-    #CPD["J1"] = [1.0, 10, 3.2910597840193506e-14, 1]
-    #CPD["V1"] = 1.0e-6
-    #phi0 = 2.067833848e-15
-    #I₀₁ = 10.0e-6
-    #Gj1 = 1/10
-    #βc₁ = 0.1
-    #Cj1 = βc₁*phi0/(2*pi)*Gj1^2/(I₀₁)
-    #Ma = phi0/(5e-6)
-
-    j_len = length(junctions)
-
+#Build the circuit based on the open file
+function build()
     eqs = Equation[]
 
-    built_loops = []    #build loops
-    #@named loop0 = build_current_source_loop(I = CPD["Ib"])
-    #push!(built_loops, loop0)
-    external_flux_strength = 3*Φ₀/14
+    built_loops = []
+    external_flux_strength = Φ₀        #### THIS NEEDS TO BE SET BY USER
 
     for i in 1:numLoops
         println("loop $(i-1)")
-        if ("Ib" in loops[i])
+        if (startswith(loops[i][1], "I"))
             new_l = "@named loop$(i-1) = build_current_source_loop(I = $(CPD["Ib"]))"
             new_l = Meta.parse(new_l)
             new_l = eval(new_l)
@@ -99,53 +115,28 @@ while true
         end
     end
 
-    #display(built_components)
-
-    #=loops_built_components = []
-    for i in 1:numLoops
-        current_components = Component[]
-        for j in loops[i]
-            push!(current_components, get(built_components, j, 0))
-        end
-        push!(loops_built_components, current_components)
-    end=#
-
-    #loops_built_components[2]
-
-    
-
-    D = Differential(t)
+    #built_components
+    #D = Differential(t)
 
     old_sys = []
-    my_u0 = Pair{Num, Float64}[]
+    global u0 = Pair{Num, Float64}[]
 
     for comp in built_components
         push!(old_sys, comp[2].sys)
         if (comp[1][1] != 'V')
-            push!(my_u0, comp[2].sys.θ=>0.0)
-            push!(my_u0, comp[2].sys.i=>0.0)
+            push!(u0, comp[2].sys.θ=>0.0)
+            push!(u0, comp[2].sys.i=>0.0)
             if (uppercase(comp[1][1]) == 'C')
-                push!(my_u0, D(comp[2].sys.θ)=>0.0)
+                push!(u0, D(comp[2].sys.θ)=>0.0)
             elseif (uppercase(comp[1][1]) == 'J')
-                push!(my_u0, D(comp[2].sys.θ)=>0.0)
+                push!(u0, D(comp[2].sys.θ)=>0.0)
             end
         end
     end
-    
     for loop in built_loops
         push!(old_sys, loop.sys)
     end
-    
-
     sys = Vector{ODESystem}(old_sys)
-
-    #=eqs_t = []
-    push!(eqs_t, built_loops[2].sys.Φₗ ~ dot(L[2,:], [l.sys.iₘ for l in built_loops]))
-    eqs_t
-    L
-    L[:,2]
-    built_loops[1].sys.iₘ
-    built_loops[2].sys.iₘ=#
 
     inductance(eqs, L, built_loops)
     current_flow(eqs, componentPhaseDirection, built_loops, built_components)
@@ -162,78 +153,99 @@ while true
     println()
     display(states(model))
     println()
-    new_model = structural_simplify(model)
+    global new_model = structural_simplify(model)
+end
 
+#Solve initial conditions
+function solve_init()
     tspan_ini = (0.0,1e-9)
-
-    prob = ODEProblem(new_model, my_u0, tspan_ini, save_everystep = false, progress=true)
+    prob = ODEProblem(new_model, u0, tspan_ini, save_everystep = false, progress=true)
     sol = solve(prob, ROS3P())
-    u0 = sol[:,end]
+    global u0 = sol[:,end]
+end
 
-    println("\n --- Enter a timespan --- ")
-    println(" --- e.g. '0.0, 100.0' or '1e-8, 1e-7' --- ")
-    input = readline()
-    tspan = (parse(Float64, split(input, ',')[1]), parse(Float64, split(input, ',')[2]))
+#Give a timespan for the simulation and solve
+function tspan(t_init, t_end)
+    tspan = (parse(Float64, t_init), parse(Float64, t_end))
     tsaves = LinRange(tspan[1],tspan[2], 50000)
-    prob = ODEProblem(new_model, u0, tspan, saveat=tsaves, progress=true)
-    sol = solve(prob)
+    global prob = ODEProblem(new_model, u0, tspan, saveat=tsaves, progress=true)
+    global sol = solve(prob)
+end
 
-    while true
-        println(" --- Enter a component and its variable to plot, enter ~ to end ---")
-        println(" --- e.g. to plot current through J1 enter J1,i or to plot voltage through J2 enter J2,V ---")
-        input = readline()
-        if (input == "~")
-            break
+#Plot a single component
+function single_plot(comp, param)
+    try
+        if (param == "i")
+            str = "$comp.sys.i"
+            ex = Meta.parse(str)
+            p = plot(sol, vars=[eval(ex)])
+            png("$(f_name)_$(comp)_i")
+        elseif (param == "V")
+            str = "D($comp.sys.θ)"
+            ex = Meta.parse(str)
+            p = plot(sol, vars=[eval(ex)])
+            png("$(f_name)_$(comp)_V")
         end
-        try
-            input = split(input, ',')
-            c = input[1]
-            v = input[2]
-            if (v == "i")
-                str = c*".sys.i"
-                ex = Meta.parse(str)
-                p = plot(sol, vars=[eval(ex)])
-                png("$(f_name)_$str")
-            elseif (v == "V")
-                str = "D($c.sys.θ)"
-                ex = Meta.parse(str)
-                p = plot(sol, vars=[eval(ex)])
-                png("$(f_name)_$str")
-            end
-        catch e
-            if isa(e, UndefVarError)
-                println(" --- Component does not exist ---")
-            elseif isa(e, ArgumentError)
-                println(" --- Cannot plot voltage through resistors at this point in time ---")
-            end
+    catch e
+        if isa(e, UndefVarError)
+            println(" --- Component does not exist ---")
+        elseif isa(e, ArgumentError)
+            println(" --- Cannot plot voltage through resistors at this point in time ---")
         end
-    end
-
-    println(" --- Enter ~ to end program, otherwise press any key to start a new circuit simulation --- ")
-    input = readline()
-    if (input == "~")
-        break
     end
 end
 
-#sim()
+function prob_func(prob,i,repeat) #problem funtion modifies input parameters
+    flux_vec = LinRange(0.0,2.0*Φ₀,200)
+    prob.p[1:numLoops] = prob.p[1:numLoops]*flux_vec[i]
 
-#=
-extern_flux = []
+end
 
-numLoops = 3
+function output_func(sol, i)
+    (mean(Φ₀/(2.0*pi)*1.0e+6*sol),false)
+end# output_func
 
-println("Enter the external flux through each loop:\nE.g. if there are 3 loops (0, 1, 2) and 0.6 of the external flux passes through loop 1 and the remaining flux passes through loop 2 enter \n'0.6-0.4'\nDo NOT enter the 0th (Ib) Loop")
-    input = "5"
-    try
-        flux = split(input, '-')
-        if (length(flux) != numLoops-1)
+function ensemble()
+    ensemble_prob = EnsembleProblem(prob, prob_func=prob_func, output_func = output_func); #ensemble
 
-        end
-        for i in 1:length(flux)
-            push!(extern_flux, parse(Float64, flux[i]))
-        end
-    catch e
-        
+    sim = solve(ensemble_prob,Tsit5(),EnsembleDistributed(),trajectories=100)
+    #sim = solve(ensemble_prob,Vern6(),EnsembleThreads(),trajectories=N_fvalues, maxiters=1e9, progress=true) #solve ensemble
+    plot(sim)
+end
+
+open_file("apf")
+build()
+solve_init()
+tspan("0.0", "1e-9")
+single_plot("Ra","i")
+
+ensemble_prob = EnsembleProblem(prob, prob_func=prob_func, output_func = output_func) #ensemble
+sim = solve(ensemble_prob,Tsit5(),EnsembleDistributed(),trajectories=100)
+
+#ensemble()
+
+#= Run from terminal commands
+while true
+    println(" --- Enter 'help' if you need help --- ")
+    input = readline()
+    if (input == "~")
+        break
+    elseif (lowercase(input) == "help")
+        #Give instructions on how to use
+    elseif startswith(lowercase(input), "open_file")
+        open_file(input[11:end-1])  
+    elseif startswith(lowercase(input), "build")
+        build()
+    elseif startswith(lowercase(input), "solve_init")
+        solve_init()
+    elseif startswith(lowercase(input), "tspan")
+        ts = split(strip(input[7:end-1]),',')   
+        tspan(strip(ts[1]), strip(ts[2]))               #strip() removes spaces
+    elseif startswith(lowercase(input), "single_plot")
+        s_plot = split(input[13:end-1], ',')
+        single_plot(strip(s_plot[1]), strip(s_plot[2])) #strip() removes spaces
     end
-    =#
+end
+=#
+
+prob.p[1:numLoops]

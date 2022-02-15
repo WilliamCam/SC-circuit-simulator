@@ -1,13 +1,22 @@
-- Watch build_voltage_source() D(θ)~ - V*2*pi/Φ₀ "-"
-- JJ in create_netlist.jl rewrite (Io, R, C, L)
+1. Units 
+2. Test L
+
+
+AC CURRENT/ VOLTAGE SOURCE
+- Create netlist accept units
 - Input error handling in create_netlist.jl
-- User input in sim_model.jl, e.g. time span to solve for, component to plot...
+- User input in sim_model.jl, e.g. time span to solve for, component to plot to function based --- PARALLEL ENSEMBELE 
 - Update README and comments
 
-- Non planar circuits
+Time vs LT-SPICE https://arxiv.org/pdf/2103.11465.pdf
 
 BENCHMARKING
 CLEANING UP CODE - PRESENTABLE
-AC CURRENT/ VOLTAGE SOURCE
-PARALLEL ENSEMBELE 
-CURRENT SOURCE AS COMPONENT WITH DIRECTIONS IN EQS RELATING TO CURRENT SOURCES
+
+
+
+
+CURRENT SOURCE AS COMPONENT WITH DIRECTIONS IN EQS RELATING TO CURRENT SOURCES --- Warning about current sources on external loop
+
+
+- Non planar circuits

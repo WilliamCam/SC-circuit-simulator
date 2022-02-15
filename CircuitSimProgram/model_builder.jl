@@ -19,12 +19,22 @@ function build_resistor(;name, R = 1.0) #Builds ODESystem for resistor using Com
     @unpack θ, i = component
     ps = @parameters R=R
     eqs = [
-            #i~*D(θ)*Φ₀/(2*pi*R)
             D(θ)~i*(2*pi*R)/Φ₀
           ]
     sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
     Component(sys)
 end
+
+#=function build_port(;name, R = 10.0) #Builds ODESystem for resistor using Component
+    @named component = build_component()
+    @unpack θ, i = component
+    ps = @parameters R=R
+    eqs = [
+            D(θ)~i*(2*pi*R)/Φ₀
+          ]
+    sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
+    Component(sys)
+end=#
 
 function build_capacitor(;name, C = 1.0) #builds ODESystem for capacitor using Component
     @named component = build_component()
@@ -48,16 +58,27 @@ function build_JJ(;name, I0 = 1.0, R = 1.0, C = 1.0) #builds ODESystem for Josep
     Component(ode_order_lowering(sys))
 end
 
-function build_voltage_source(;name, V = 1.0)
+function build_voltage_source(;name, V = 1.0, ω = 0.0)
     @named component = build_component()
     @unpack θ, i = component
     ps = @parameters V=V
     eqs = [
-            D(θ)~ - V*2*pi/Φ₀
+            D(θ)~ - V*cos(ω*t)*2*pi/Φ₀
           ]
     sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
     Component(sys)
 end
+
+#=function build_drive_port(;name, V = 1.0, ω = 0.0)
+    @named component = build_component()
+    @unpack θ, i = component
+    ps = @parameters V=V
+    eqs = [
+            D(θ)~ - V*cos(ω*t)*2*pi/Φ₀
+          ]
+    sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
+    Component(sys)
+end=# #How to include eqs for resistor?
 
 struct Loop
     sys::ODESystem
@@ -74,20 +95,17 @@ struct CurrentSourceLoop
     sys::ODESystem
 end
 
-function build_current_source_loop(;name, I = 1.0)
+function build_current_source_loop(;name, I = 1.0, ω = 0.0)
     @named loop = build_loop()
     @unpack sys = loop
     @unpack iₘ, Φₗ = sys
     ps = @parameters I = I
     eqs = [
-            0 ~ iₘ - I
-            #0 ~ Φₗ                  # No external flux through loop0 (Ib)
+            0 ~ iₘ - I*cos(ω*t)
           ]
     sys = extend(ODESystem(eqs, t, [], ps, name=name), loop.sys)
     CurrentSourceLoop(sys)
 end
-
-#declared_cs = []
 
 struct ComponentFlow
     c::Component
@@ -98,7 +116,6 @@ function add_loop!(
     eqs::Vector{Equation},l, σ::Vector, cs
     )
     push!(eqs,0 ~ l.sys.Φₑ-l.sys.Φₗ - dot([Φ₀/(2*pi)*c.sys.θ for (n, c) in cs], σ)) #<---- σA . θ
-    #push!(eqs, 0 ~ -l.sys.Lᵢᵢ*l.sys.iₘ - l.sys.Φₗ)
 end
 
 function inductance(eqs::Vector{Equation}, L, built_loops)
@@ -108,36 +125,6 @@ function inductance(eqs::Vector{Equation}, L, built_loops)
         end
     end
 end
-#=
-function add_current_source_loop!(
-    eqs::Vector{Equation}, lc::CurrentSourceLoop, σ::Vector{Float64}, cs::Component ...
-    )
-    branched_cs = []
-    names = [cname for cname in map(c->nameof(c.sys),cs)]
-    new_cs = map((c,σⱼ)->ComponentFlow(c,σⱼ),cs,σ)
-       for cFlow in new_cs
-           if nameof(cFlow.c.sys) in declared_cs
-               push!(branched_cs,cFlow)
-           else
-               push!(declared_cs,nameof(cFlow.c.sys))
-           end
-       end
-
-       for cFlow in setdiff(new_cs,branched_cs)
-           push!(eqs, 0 ~ lc.sys.iₘ - cFlow.σ*cFlow.c.sys.i)
-       end
-
-       for cFlow in branched_cs
-           eqs = substitute(eqs,Dict(cFlow.c.sys.i=>cFlow.c.sys.i-cFlow.σ*lc.sys.iₘ))
-       end
-
-       push!(eqs, 0 ~ -lc.sys.Lᵢᵢ*lc.sys.iₘ -  lc.sys.Φₗ)
-end=#
-
-#=function mutual_inductance(eqs, l1::Loop, l2::Loop; Lᵢⱼ::Float64 = 1.0)
-    substitute(eqs, Dict(-l1.sys.Lᵢᵢ*l1.sys.iₘ=>-l1.sys.Lᵢᵢ*l1.sys.iₘ-l2.sys.iₘ*Lᵢⱼ))
-    substitute(eqs, Dict(-l2.sys.Lᵢᵢ*l2.sys.iₘ=>-l2.sys.Lᵢᵢ*l2.sys.iₘ-l1.sys.iₘ*Lᵢⱼ))
-end=#
 
 function current_flow(eqs::Vector{Equation}, componentPhaseDirection, built_loops, built_components)
     for (comp, phase_array) in componentPhaseDirection              #Loop through each junction where "comp" is the junction name and "phase_array" is the row of σB corresponding to the currente junction
