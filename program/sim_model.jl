@@ -1,4 +1,4 @@
-using JLD2, FileIO, ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra
+using JLD2, FileIO, ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra, Statistics
 include("model_builder.jl")
 
 function open_file(name)
@@ -69,7 +69,7 @@ function build()
     eqs = Equation[]
 
     built_loops = []
-    external_flux_strength = Φ₀        #### THIS NEEDS TO BE SET BY USER
+    external_flux_strength = Φ₀/10        #### THIS NEEDS TO BE SET BY USER
 
     for i in 1:numLoops
         println("loop $(i-1)")
@@ -114,9 +114,6 @@ function build()
             built_components[j] = new_c
         end
     end
-
-    #built_components
-    #D = Differential(t)
 
     old_sys = []
     global u0 = Pair{Num, Float64}[]
@@ -195,34 +192,55 @@ function single_plot(comp, param)
     end
 end
 
+#Ensemble functions, not complete
 function prob_func(prob,i,repeat) #problem funtion modifies input parameters
-    flux_vec = LinRange(0.0,2.0*Φ₀,200)
-    prob.p[1:numLoops] = prob.p[1:numLoops]*flux_vec[i]
-
+    global flux_vec = LinRange(0.0,10,10)
+    new_p = prob.p[1:numLoops]*flux_vec[i]
+    remake(prob,p=[new_p; prob.p[(numLoops+1):end]])
 end
-
 function output_func(sol, i)
     (mean(Φ₀/(2.0*pi)*1.0e+6*sol),false)
 end# output_func
-
+<<<<<<< Updated upstream
 function ensemble()
-    ensemble_prob = EnsembleProblem(prob, prob_func=prob_func, output_func = output_func); #ensemble
-
+    ensemble_prob = EnsembleProblem(prob, prob_func=prob_func, output_func = output_func) #ensemble
     sim = solve(ensemble_prob,Tsit5(),EnsembleDistributed(),trajectories=100)
-    #sim = solve(ensemble_prob,Vern6(),EnsembleThreads(),trajectories=N_fvalues, maxiters=1e9, progress=true) #solve ensemble
-    plot(sim)
-end
+=======
 
+#=function ensemble()
+    ensemble_prob = EnsembleProblem(prob, prob_func=prob_func); #ensemble
+
+    sim = solve(ensemble_prob,Tsit5(),EnsembleDistributed(),trajectories=200)
+    #sim = solve(ensemble_prob,Vern6(),EnsembleThreads(),trajectories=N_fvalues, maxiters=1e9, progress=true) #solve ensemble
+>>>>>>> Stashed changes
+    plot(sim)
+end=#
+
+#=  Commands running from Julia REPL
 open_file("apf")
 build()
 solve_init()
-tspan("0.0", "1e-9")
+tspan("0.0", "1e-12")
 single_plot("Ra","i")
+<<<<<<< Updated upstream
+=#
+=======
 
-ensemble_prob = EnsembleProblem(prob, prob_func=prob_func, output_func = output_func) #ensemble
-sim = solve(ensemble_prob,Tsit5(),EnsembleDistributed(),trajectories=100)
+ensemble_prob = EnsembleProblem(prob, prob_func=prob_func)#, output_func = output_func); #ensemble
+sim = solve(ensemble_prob,EnsembleThreads(),trajectories=10, maxiters=1e9, progress=true) #solve ensemble
+plot(sim, vars=(D(J1.sys.θ), J1.sys.i))
 
+
+graph = plot(flux_vec,sim[:],
+    title = "RLC-SQUID Parallel Config \n Flux-Voltage Response",
+    xlabel = "Flux (Φe/Φ₀)",
+    ylabel = "Averaged Vout (μVrms)"
+    )
+display(graph)
+
+plot(sim)
 #ensemble()
+>>>>>>> Stashed changes
 
 #= Run from terminal commands
 while true
@@ -246,6 +264,13 @@ while true
         single_plot(strip(s_plot[1]), strip(s_plot[2])) #strip() removes spaces
     end
 end
+<<<<<<< Updated upstream
 =#
-
+=======
+=#
+ 
+prob.p
 prob.p[1:numLoops]
+new_p = prob.p[1:numLoops]*2
+newer_p = [new_p; prob.p[4:end]]
+>>>>>>> Stashed changes

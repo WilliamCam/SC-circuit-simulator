@@ -1,22 +1,15 @@
-1. Units 
-2. Test L
+Units when giving values (m, u, n)
+AC current + voltage source testing
+Input error handling
+Parallel ensembele
 
-
-AC CURRENT/ VOLTAGE SOURCE
-- Create netlist accept units
-- Input error handling in create_netlist.jl
-- User input in sim_model.jl, e.g. time span to solve for, component to plot to function based --- PARALLEL ENSEMBELE 
-- Update README and comments
+Update README and comments
 
 Time vs LT-SPICE https://arxiv.org/pdf/2103.11465.pdf
+Benchmarking
 
-BENCHMARKING
-CLEANING UP CODE - PRESENTABLE
-
-
-
-
-CURRENT SOURCE AS COMPONENT WITH DIRECTIONS IN EQS RELATING TO CURRENT SOURCES --- Warning about current sources on external loop
+Current source as a component rather than a loop
+--- Warning about current sources on external loop
 
 
-- Non planar circuits
+Non planar circuits

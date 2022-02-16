@@ -25,7 +25,7 @@ function build_resistor(;name, R = 1.0) #Builds ODESystem for resistor using Com
     Component(sys)
 end
 
-#=function build_port(;name, R = 10.0) #Builds ODESystem for resistor using Component
+#=function build_port(;name, R = 50.0) #Builds ODESystem for resistor using Component
     @named component = build_component()
     @unpack θ, i = component
     ps = @parameters R=R
