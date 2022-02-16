@@ -201,18 +201,12 @@ end
 function output_func(sol, i)
     (mean(Φ₀/(2.0*pi)*1.0e+6*sol),false)
 end# output_func
-<<<<<<< Updated upstream
-function ensemble()
-    ensemble_prob = EnsembleProblem(prob, prob_func=prob_func, output_func = output_func) #ensemble
-    sim = solve(ensemble_prob,Tsit5(),EnsembleDistributed(),trajectories=100)
-=======
 
 #=function ensemble()
     ensemble_prob = EnsembleProblem(prob, prob_func=prob_func); #ensemble
 
     sim = solve(ensemble_prob,Tsit5(),EnsembleDistributed(),trajectories=200)
     #sim = solve(ensemble_prob,Vern6(),EnsembleThreads(),trajectories=N_fvalues, maxiters=1e9, progress=true) #solve ensemble
->>>>>>> Stashed changes
     plot(sim)
 end=#
 
@@ -222,9 +216,6 @@ build()
 solve_init()
 tspan("0.0", "1e-12")
 single_plot("Ra","i")
-<<<<<<< Updated upstream
-=#
-=======
 
 ensemble_prob = EnsembleProblem(prob, prob_func=prob_func)#, output_func = output_func); #ensemble
 sim = solve(ensemble_prob,EnsembleThreads(),trajectories=10, maxiters=1e9, progress=true) #solve ensemble
@@ -240,7 +231,6 @@ display(graph)
 
 plot(sim)
 #ensemble()
->>>>>>> Stashed changes
 
 #= Run from terminal commands
 while true
@@ -264,13 +254,9 @@ while true
         single_plot(strip(s_plot[1]), strip(s_plot[2])) #strip() removes spaces
     end
 end
-<<<<<<< Updated upstream
-=#
-=======
 =#
  
 prob.p
 prob.p[1:numLoops]
 new_p = prob.p[1:numLoops]*2
 newer_p = [new_p; prob.p[4:end]]
->>>>>>> Stashed changes
