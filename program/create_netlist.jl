@@ -146,25 +146,55 @@ function find_components(numLoops, loops)
     for comp in keys(componentLoopDict)         #Finds circiut component parameters
         if (comp[1] == 'V')
             push!(junctions, comp)
-            println("What is the Voltage of $comp (V)?")
-            try
-                input = Meta.parse(readline())
-                componentParamDict[comp]=input
-            catch e
-                if isa(e, MethodError)
-                    input = readline()
-                    componentParamDict[comp]=parse(Float64, input)
+            println("Is $comp an AC or DC voltage source?")
+            input = readline()
+            if (lowercase(input) == "dc")
+                println("What is the voltage of $comp (V)?")
+                try
+                    input = Meta.parse(readline())
+                    componentParamDict[comp]=input
+                catch e
+                    if isa(e, MethodError)
+                        input = readline()
+                        componentParamDict[comp]=parse(Float64, input)
+                    end
+                end
+            elseif (lowercase(input) == "ac")
+                println("What is the amplitude and frequency of $comp (V, Hz)?")
+                try
+                    input = split(readline(), ',')
+                    componentParamDict[comp]=(Meta.parse(input[1]), Meta.parse(input[2]))
+                catch e
+                    if isa(e, MethodError)
+                        input = readline()
+                        componentParamDict[comp]=(parse(Float64, input[1]), parse(Float64, input[2]))
+                    end
                 end
             end
         elseif (comp[1] == 'I')
-            println("What is the current through $comp (A)?")
-            try
-                input = Meta.parse(readline())
-                componentParamDict[comp]=input
-            catch e
-                if isa(e, MethodError)
-                    input = readline()
-                    componentParamDict[comp]=parse(Float64, input)
+            println("Is $comp an AC or DC current source?")
+            input = readline()
+            if (lowercase(input) == "dc")
+                println("What is the current of $comp (A)?")
+                try
+                    input = Meta.parse(readline())
+                    componentParamDict[comp]=input
+                catch e
+                    if isa(e, MethodError)
+                        input = readline()
+                        componentParamDict[comp]=parse(Float64, input)
+                    end
+                end
+            elseif (lowercase(input) == "ac")
+                println("What is the amplitude and frequency of $comp (A, Hz)?")
+                try
+                    input = split(readline(), ',')
+                    componentParamDict[comp]=(Meta.parse(input[1]), Meta.parse(input[2]))
+                catch e
+                    if isa(e, MethodError)
+                        input = readline()
+                        componentParamDict[comp]=(parse(Float64, input[1]), parse(Float64, input[2]))
+                    end
                 end
             end
         elseif (comp[1] == 'R')
@@ -267,29 +297,6 @@ function new_netlist(name)
         end
     end            
 
-    println("Enter any mutually coupled loops:\nE.g. if loop 1 and 2 are coupled with mutual inductance 5μA/Φ𝜊 enter\n'1,2,5'\n(Enter '~' when all are listed)")
-    while true
-        input = readline()
-        if (input == "~")           
-            break
-        end
-        try
-            currentMutual = split(input, ',')
-            if (length(currentMutual) != 3)
-                throw(error)
-            end
-            mutualTuple = (parse(Int8, currentMutual[1]), parse(Int8, currentMutual[2]))
-            mutualTuple = (mutualTuple, parse(Float64, currentMutual[3]))
-            push!(mutualInd, mutualTuple)
-        catch e
-            if isa(e, ArgumentError)
-                println(" --- One or more variable types are incorrect, loops must be Int and inductance must be Float ---")
-            elseif e == error
-                println(" --- Incorrect input length, enter 3 values seperated by commas ---")
-            end
-        end
-    end
-
     for i in 1:numLoops                         #Asks about circuit elements
         push!(loops, [])
         println("Enter all components in Loop $(i-1) one by one\n(Enter '~' when all components are listed)")
@@ -320,12 +327,62 @@ function new_netlist(name)
         push!(junctions, input)
     end=#
     
-    println("Enter the external flux through each loop:\nE.g. if there are 3 loops (0, 1, 2) and 0.6 of the external flux passes through loop 1 and the remaining flux passes through loop 2 enter \n'0-0.6-0.4'")
+    println("Enter the external flux through each loop:\nE.g. if there are 3 loops (0, 1, 2) and 0.6 of the external flux passes through loop 1 and the remaining flux passes through loop 2 enter \n'0,0.6,0.4'")
     input = readline()
     if (input != "")
-        flux = split(input, '-')
+        flux = split(input, ',')
         for i in 1:length(flux)
-            push!(extern_flux, parse(Float64, flux[i]))
+            f = strip(flux[i])
+            println(f)
+            f = split(f, '/')
+            if (length(f) == 1)
+                try
+                    push!(extern_flux, parse(Float64, f[1]))
+                catch e
+                    if isa(e, ArgumentError)
+                        println(" --- Values must be passed as floats ---")
+                    end
+                end
+            elseif (length(f) == 2)
+                f1 = -1.0
+                f2 = -1.0
+                try
+                    f1 = parse(Float64, f[1])
+                    f2 = parse(Float64, f[2]) 
+                catch e
+                    if isa(e, ArgumentError)
+                        println(" --- Values must be passed as floats ---")
+                    end
+                end
+                if (f2 == 0)
+                    println(" --- Cannot divide by 0 ---")
+                else
+                    push!(extern_flux, f1/f2)
+                end
+            end
+        end
+    end
+
+    println("Enter any mutually coupled loops:\nE.g. if loop 1 and 2 are coupled with mutual inductance 5μA/Φ𝜊 enter\n'1,2,5'\n(Enter '~' when all are listed)")
+    while true
+        input = readline()
+        if (input == "~")           
+            break
+        end
+        try
+            currentMutual = split(input, ',')
+            if (length(currentMutual) != 3)
+                throw(error)
+            end
+            mutualTuple = (parse(Int8, currentMutual[1]), parse(Int8, currentMutual[2]))
+            mutualTuple = (mutualTuple, parse(Float64, currentMutual[3]))
+            push!(mutualInd, mutualTuple)
+        catch e
+            if isa(e, ArgumentError)
+                println(" --- One or more variable types are incorrect, loops must be Int and inductance must be Float ---")
+            elseif e == error
+                println(" --- Incorrect input length, enter 3 values seperated by commas ---")
+            end
         end
     end
 
@@ -376,14 +433,64 @@ function edit_netlist(name)
             while true
                 display(componentParamDict)
                 println()
-                println("Enter a component followed by '-' followed by it's new parameter. E.g. to change Ra from 2 Ohm to 3 Ohm enter Ra-3\nEnter ~ when finished editing parameters")
+                println("Enter a component followed by '>' followed by it's new parameter. E.g. to change Ra from 2 Ohm to 3 Ohm enter Ra>3")
+                println("For JJ's enter comma seperated parameters e.g. J1>10e-6,27,3.24,50e-3")
+                println("Enter ~ when finished editing parameters")
                 input = readline()
                 if (input == "~")
                     break
                 end
-                comp_param = split(input, '-')
+                comp_param = split(input, '>')
                 if (comp_param[1] in keys(componentParamDict))
-                    componentParamDict[comp_param[1]] = comp_param[2]
+                    if startswith(comp_param[1], 'J')
+                        params = split(comp_param[2], ',')
+                        param_a = []
+                        for p in params
+                            try
+                                input = Meta.parse(p)
+                            catch e
+                                if isa(e, MethodError)
+                                    input = parse(Float64, p)
+                                end
+                            end
+                            push!(param_a, input)
+                        end
+                        componentParamDict[comp_param[1]] = param_a
+                    elseif (startswith(comp_param[1], 'I') || startswith(comp_param[1], 'V'))
+                        params = split(comp_param[2], ',')
+                        if (length(params) == 2)
+                            param_a = []
+                            for p in params
+                                try
+                                    input = Meta.parse(p)
+                                catch e
+                                    if isa(e, MethodError)
+                                        input = parse(Float64, p)
+                                    end
+                                end
+                                push!(param_a, input)
+                            end
+                            componentParamDict[comp_param[1]] = param_a
+                        else
+                            try
+                                input = Meta.parse(comp_param[2])
+                            catch e
+                                if isa(e, MethodError)
+                                    input = parse(Float64, input)
+                                end
+                            end
+                            componentParamDict[comp_param[1]] = input
+                        end
+                    else
+                        try
+                            input = Meta.parse(comp_param[2])
+                        catch e
+                            if isa(e, MethodError)
+                                input = parse(Float64, input)
+                            end
+                        end
+                        componentParamDict[comp_param[1]] = input
+                    end
                 else
                     println("Component does not exist, try agian")
                 end
@@ -434,10 +541,10 @@ function edit_netlist(name)
         elseif (uppercase(input) == "K")
             display(k)
             println()
-            println("Enter the new external flux through each loop:\nE.g. if there are 3 loops (0, 1, 2) and 0.6 of the external flux passes through loop 1 and the remaining flux passes through loop 2 enter \n'0-0.6-0.4'")
+            println("Enter the new external flux through each loop:\nE.g. if there are 3 loops (0, 1, 2) and 0.6 of the external flux passes through loop 1 and the remaining flux passes through loop 2 enter \n'0,0.6,0.4'")
             input = readline()
             k = []
-            flux = split(input, '-')
+            flux = split(input, ',')
             for i in 1:length(flux)
                 push!(k, parse(Float64, flux[i]))
             end
