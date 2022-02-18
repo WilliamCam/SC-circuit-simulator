@@ -151,6 +151,7 @@ function find_components(numLoops, loops)
         if (comp[1] == 'V')
             push!(junctions, comp)
 
+
             println("Is $comp an AC or DC voltage source?")
             input = readline()
             if (lowercase(input) == "dc")
@@ -174,6 +175,7 @@ function find_components(numLoops, loops)
                         input = readline()
                         componentParamDict[comp]=(parse(Float64, input[1]), parse(Float64, input[2]))
                     end
+
 
                 end
             end
