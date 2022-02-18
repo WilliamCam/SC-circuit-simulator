@@ -25,17 +25,6 @@ function build_resistor(;name, R = 1.0) #Builds ODESystem for resistor using Com
     Component(sys)
 end
 
-#=function build_port(;name, R = 50.0) #Builds ODESystem for resistor using Component
-    @named component = build_component()
-    @unpack θ, i = component
-    ps = @parameters R=R
-    eqs = [
-            D(θ)~i*(2*pi*R)/Φ₀
-          ]
-    sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
-    Component(sys)
-end=#
-
 function build_capacitor(;name, C = 1.0) #builds ODESystem for capacitor using Component
     @named component = build_component()
     @unpack θ, i = component
@@ -68,17 +57,6 @@ function build_voltage_source(;name, V = 1.0, ω = 0.0)
     sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
     Component(sys)
 end
-
-#=function build_drive_port(;name, V = 1.0, ω = 0.0)
-    @named component = build_component()
-    @unpack θ, i = component
-    ps = @parameters V=V
-    eqs = [
-            D(θ)~ - V*cos(ω*t)*2*pi/Φ₀
-          ]
-    sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
-    Component(sys)
-end=# #How to include eqs for resistor?
 
 struct Loop
     sys::ODESystem
