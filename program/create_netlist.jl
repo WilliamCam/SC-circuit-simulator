@@ -15,13 +15,8 @@ function process_netlist(name)
 
     file = jldopen("$name.jld2", "w") #Open file to write new data
 
-<<<<<<< HEAD:Create Netlist/create_netlist.jl
-    L = zeros(Float64, 0, numLoops-1)            #🟢 
-    σB = zeros(Float64, 0, numLoops)            #🟢
-=======
     L = zeros(Float64, 0, numLoops)            
     σB = zeros(Float64, 0, numLoops)           
->>>>>>> daf5f018e386a707d6168c408401a8b491a9725c:program/create_netlist.jl
     componentPhaseDirection = Dict() 
 
     symbolDict = Dict()
@@ -65,14 +60,11 @@ function process_netlist(name)
             for n in loops[i]                   #Third iteration to go through the components in loop 1
                 if ((n[1] == 'J') || (n[1] == 'L')) #Merge if statemets??
                     if (j-1 in get(componentLoopDict, n, -1))   #If component n is in the loop j
-<<<<<<< HEAD:Create Netlist/create_netlist.jl
-=======
                         if (n[1] == 'J')
                             param = get(componentParamDict, n, 0)[4]
                         elseif (n[1] == 'L')
                             param = get(componentParamDict, n, 0)
                         end
->>>>>>> daf5f018e386a707d6168c408401a8b491a9725c:program/create_netlist.jl
                         if (i == j)             #Positive/Negative <--- Needs to be checked
                             temp_float = temp_float + parse(Float64, get(componentParamDict, n, 0))
                         else
@@ -118,8 +110,6 @@ function process_netlist(name)
     L = transpose(L)
     σA = transpose(σB)
 
-<<<<<<< HEAD:Create Netlist/create_netlist.jl
-=======
     #=
     println(L)
     println(σA)
@@ -134,7 +124,6 @@ function process_netlist(name)
     file["editing/numLoops"] = numLoops
     file["editing/mutualInd"] = mutualInd
     file["matrices/k"] = k
->>>>>>> daf5f018e386a707d6168c408401a8b491a9725c:program/create_netlist.jl
     file["matrices/L"] = L
     file["matrices/σA"] = σA
     file["matrices/σB"] = σB
@@ -157,11 +146,6 @@ function find_components(numLoops, loops)
     for comp in keys(componentLoopDict)         #Finds circiut component parameters
         if (comp[1] == 'V')
             push!(junctions, comp)
-<<<<<<< HEAD:Create Netlist/create_netlist.jl
-            println("What is the Voltage of $comp?")
-            input = readline()
-            componentParamDict[comp]=input
-=======
             println("What is the Voltage of $comp (V)?")
             try
                 input = Meta.parse(readline())
@@ -183,7 +167,6 @@ function find_components(numLoops, loops)
                     componentParamDict[comp]=parse(Float64, input)
                 end
             end
->>>>>>> daf5f018e386a707d6168c408401a8b491a9725c:program/create_netlist.jl
         elseif (comp[1] == 'R')
             push!(junctions, comp)
             println("What is the resistance of $comp (Ω)?")
@@ -221,20 +204,6 @@ function find_components(numLoops, loops)
             end
         elseif (comp[1] == 'J')
             push!(junctions, comp)
-<<<<<<< HEAD:Create Netlist/create_netlist.jl
-            println("What is the critical current of $comp?")
-            input = readline()
-            componentParamDict[comp]=[input]
-            println("What is the shunt resistance of $comp?")
-            input = readline()
-            componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
-            println("What is the Stewart-McCumber parameter for $comp?")
-            input = readline()
-            componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
-            println("What is the inductance for $comp?")
-            input = readline()
-            componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
-=======
             println("What is the critical current of $comp (A)?")
             try
                 input = Meta.parse(readline())
@@ -275,7 +244,6 @@ function find_components(numLoops, loops)
                     componentParamDict[comp]=push!(get(componentParamDict, comp, []), parse(Float64, input))
                 end
             end
->>>>>>> daf5f018e386a707d6168c408401a8b491a9725c:program/create_netlist.jl
         end
     end
     return componentLoopDict, componentParamDict, junctions
