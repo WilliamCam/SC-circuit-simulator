@@ -1,3 +1,4 @@
+User defined components
 Units when giving values (m, u, n)
 AC current + voltage source testing
 Input error handling
@@ -10,6 +11,5 @@ Benchmarking
 
 Current source as a component rather than a loop
 --- Warning about current sources on external loop
-
 
 Non planar circuits
