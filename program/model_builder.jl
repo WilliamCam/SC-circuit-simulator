@@ -14,18 +14,7 @@ struct Component
     sys::ODESystem
 end
 
-function build_resistor(;name, R = 1.0) #Builds ODESystem for resistor using Component
-    @named component = build_component()
-    @unpack θ, i = component
-    ps = @parameters R=R
-    eqs = [
-            D(θ)~i*(2*pi*R)/Φ₀
-          ]
-    sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
-    Component(sys)
-end
-
-function build_nonlinear_resistor(;name, R = 1.0, k = 0.0) #Builds ODESystem for a nonlinear resistor using Component
+function build_resistor(;name, R = 1.0, k = 0.0) #Builds ODESystem for a nonlinear resistor using Component
     @named component = build_component()
     @unpack θ, i = component
     ps = @parameters R=R k=k
@@ -36,18 +25,8 @@ function build_nonlinear_resistor(;name, R = 1.0, k = 0.0) #Builds ODESystem for
     Component(sys)
 end
 
-function build_capacitor(;name, C = 1.0) #builds ODESystem for capacitor using Component
-    @named component = build_component()
-    @unpack θ, i = component
-    ps = @parameters C=C
-    eqs = [
-            D2(θ)~i*2*pi/(Φ₀*C)
-          ]
-    sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
-    Component(ode_order_lowering(sys))
-end
 
-function build_nonlinear_capacitor(;name, C = 1.0, k = 0.0) #builds ODESystem for nonlinear capacitor using Component
+function build__capacitor(;name, C = 1.0, k = 0.0) #builds ODESystem for capacitor using Component
     @named component = build_component()
     @unpack θ, i = component
     ps = @parameters C=C k=k

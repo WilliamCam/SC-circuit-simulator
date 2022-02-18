@@ -263,7 +263,7 @@ function find_components(numLoops, loops)
                     componentParamDict[comp]=push!(get(componentParamDict, comp, []), parse(Float64, input))
                 end
             end
-            println("What is the capacitance of $comp (C)?")
+            println("What is the capacitance of $comp (F)?")
             try
                 input = Meta.parse(readline())
                 componentParamDict[comp]=push!(get(componentParamDict, comp, []), input)
