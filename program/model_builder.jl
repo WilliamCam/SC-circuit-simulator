@@ -97,7 +97,7 @@ function add_loop!(
 end
 
 function inductance(eqs::Vector{Equation}, L, built_loops)
-    for i in 1:length(built_loops)                              #Starts at loop1 as loop0 (Ib) can not have inductance
+    for i in 1:length(built_loops)
         if (string(built_loops[i])[1:4] == "Loop")
             push!(eqs, built_loops[i].sys.Φₗ ~ dot(L[:,i], [l.sys.iₘ for l in built_loops]))
         end

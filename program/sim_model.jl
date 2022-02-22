@@ -1,4 +1,4 @@
-using JLD2, FileIO, ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra, Statistics
+using JLD2, FileIO, ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra, Statistics, Dates
 include("model_builder.jl")
 
 function help()
@@ -6,7 +6,7 @@ function help()
 end
 
 function open_file(name)
-     f_name = name
+    f_name = name
     try
         if endswith(f_name, ".jld2")
             file = jldopen(f_name, "r")
@@ -57,13 +57,15 @@ function symbolic_assign()
         end
     end
     for sym in symbolDict
+        println("Symbol: \n$(sym[1])\nComponents")
+        display(sym[2])
         println("Please enter a value for $(sym[1])")
         input = readline()
         for i in sym[2]
             if isa(i, Tuple)
                 CPD[i[1]][i[2]] = parse(Float64, input)
             else
-                CPD[i] = input
+                CPD[i] = parse(Float64, input)
             end
         end
     end
@@ -89,11 +91,10 @@ function edit_param()
 end
 
 #Build the circuit based on the open file
-function build()
+function build(Φext)
     eqs = Equation[]
 
     built_loops = []
-    external_flux_strength = Φ₀/10        #### THIS NEEDS TO BE SET BY USER
 
     for i in 1:numLoops
         println("loop $(i-1)")
@@ -115,7 +116,7 @@ function build()
             new_l = Meta.parse(new_l)
             new_l = eval(new_l)
         else
-            new_l = "@named loop$(i-1) = build_loop(Φₑ = $(external_flux_strength*k[i]))"
+            new_l = "@named loop$(i-1) = build_loop(Φₑ = $(Φext*k[i]))"
             new_l = Meta.parse(new_l)
             new_l = eval(new_l)
         end
@@ -218,21 +219,35 @@ function single_plot(comp, param)
             str = "$comp.sys.i"
             ex = Meta.parse(str)
             p = plot(sol, vars=[eval(ex)])
-            png("$(f_name)_$(comp)_i")
+            display(p)
+            png("$(now())")
         elseif (param == "V")
             str = "D($comp.sys.θ)"
             ex = Meta.parse(str)
             p = plot(sol, vars=[eval(ex)])
-            png("$(f_name)_$(comp)_V")
+            display(p)
+            png("$(now())")
         end
     catch e
         if isa(e, UndefVarError)
             println(" --- Component does not exist ---")
         elseif isa(e, ArgumentError)
-            println(" --- Cannot plot voltage through this component at this point in time ---")
+            dtime = sol.t[2]-sol.t[1]
+            str = "$comp.sys.θ"
+            ex = Meta.parse(str)
+            dv = sol[eval(ex)]
+            res = []
+            for i in 1:length(dv)-1
+                d = Φ₀/2pi*(dv[i+1] - dv[i])/dtime
+                push!(res, d)
+            end
+            p = plot(sol.t[1:end-1], res)
+            display(p)
+            png("$(now())")
         end
     end
 end
+
 
 #=Ensemble functions, not complete
 function prob_func(prob,i,repeat) #problem funtion modifies input parameters
@@ -250,13 +265,14 @@ function ensemble()
 end=#
 
 ###  Commands running from Julia REPL
-numLoops, CPD, junctions, loops, k, L, σA, componentPhaseDirection = open_file("circuits/ishaan")
-#edit_param() readline() does not work in RELP
-new_model, u0 = build()
+numLoops, CPD, junctions, loops, k, L, σA, componentPhaseDirection = open_file("circuits/ac-i")
+symbolic_assign()  #readline() does not work well in RELP
+edit_param()       #readline() does not work well in RELP
+new_model, u0 = build(Φ₀/10)
 u0 = solve_init(u0)
 sol = tspan("0.0", "1000")
-single_plot("R","i")
-plot(sol, vars=[R.sys.θ])
+single_plot("R1","V")
+
 # =#
 
 #=## Run from terminal commands
@@ -270,15 +286,15 @@ while true
     elseif startswith(lowercase(input), "open_file")
         open_file(input[11:end-1])  
     elseif startswith(lowercase(input), "build")
-        build()
+        build(input[7:end-1])
     elseif startswith(lowercase(input), "solve_init")
         solve_init()
     elseif startswith(lowercase(input), "tspan")
         ts = split(strip(input[7:end-1]),',')   
-        tspan(strip(ts[1]), strip(ts[2]))               #strip() removes spaces
+        tspan(strip(ts[1]), strip(ts[2]))
     elseif startswith(lowercase(input), "single_plot")
         s_plot = split(input[13:end-1], ',')
-        single_plot(strip(s_plot[1]), strip(s_plot[2])) #strip() removes spaces
+        single_plot(strip(s_plot[1]), strip(s_plot[2]))
     elseif startswith(lowercase(input), "edit_param")
         edit_param()
     elseif startswith(lowercase(input), "symbolic_assign")
