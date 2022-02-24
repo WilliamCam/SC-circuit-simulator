@@ -1,10 +1,8 @@
-- User defined components
-- Units when giving values (m, u, n)
+- User defined components (as loops)
+- Accept units when giving values (m, u, n)
 - Input error handling
 - Parallel ensembele
-- Update README and comments
 - Time vs LT-SPICE https://arxiv.org/pdf/2103.11465.pdf
     -Benchmarking
 - Current source as a component rather than a loop
-- Warning about current sources on external loop
 - Non planar circuits
