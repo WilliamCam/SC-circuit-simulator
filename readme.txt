@@ -1,24 +1,24 @@
-*******************************************************************************************************************************
-***													create_netlist.jl														***
-*******************************************************************************************************************************
+******************************************************************************************************************
+***											    create_netlist.jl										   	   ***
+******************************************************************************************************************
 
-The file create_netlist.jl is a program used to create and edit circuit 'netlists' which describe circuits in terms of loops and 
-components. These 'netlists' are used in sim_model.jl to simulate a circuit.
+The file create_netlist.jl is a program used to create and edit circuit 'netlists' which describe circuits in 
+terms of loops and components. These 'netlists' are used in sim_model.jl to simulate a circuit.
 
 jdl2 files cannot be edited with a text editor hence to edit a netlist use the edit function in create_netlist.jl
 
--------------------------------------------------------------------------------------------------------------------------------
----												  Creating a new netlist													---
--------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------
+---										     Creating a new netlist									   		   ---
+------------------------------------------------------------------------------------------------------------------
 
 Total number of loops is limited to 128 loops as numloops is defined as an Int8
 
-...............................................................................................................................
+..................................................................................................................
 
 CURRENT SOURCES MUST BE ON THE OUTSIDE OF AN EXTERNAL LOOP
 
-When defining loops and components ensure that loops on the right or bottom side of an existing loop have a higher loop number
-than those on the left or top side.
+When defining loops and components ensure that loops on the right or bottom side of an existing loop have a 
+higher loop number than those on the left or top side.
 
 The following loop numbers are good 
   _ _ _   _ _ _   _ _ _ 
@@ -64,28 +64,27 @@ AC current or voltage source parameters should be entered as 'amplitude, frequen
 
 Entering symbolics for component parameters is supported
 
-...............................................................................................................................
+..................................................................................................................
 
 Entering symbolics for the external flux vector is not supported
 
-...............................................................................................................................
-
+..................................................................................................................
 When entering mutually inducted loops enter in the form '1,2,5e-6' where loop 1 and 2 are coupled with mutual inductance 5μA/Φ𝜊
 
--------------------------------------------------------------------------------------------------------------------------------
----											  Editing an existing netlist													---
--------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------
+---										  Editing an existing netlist									   	   ---
+------------------------------------------------------------------------------------------------------------------
 
 It is recommended that a backup file is saved before attempting to edit large netlists as if an error occurs all data is 
 corrupted 
 
-...............................................................................................................................
+..................................................................................................................
 
 Changing component parameters to symbolic values is supported
 
-*******************************************************************************************************************************
-***													model_builder.jl														***
-*******************************************************************************************************************************
+******************************************************************************************************************
+***											   model_builder.jl										   	       ***
+******************************************************************************************************************
 
 The file model_builder.jl is used by sim_model.jl to create a model based on a circuit 'netlist' (which would be created using
 create_netlist.jl)
@@ -93,6 +92,6 @@ create_netlist.jl)
 The user mostly does not directly interact with model_builder.jl as the build function in sim_model.jl automates the model 
 building process.
 
-*******************************************************************************************************************************
-***													  sim_model.jl														***
-*******************************************************************************************************************************
+******************************************************************************************************************
+***											     sim_model.jl										   	       ***
+******************************************************************************************************************
