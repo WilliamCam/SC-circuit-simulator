@@ -161,7 +161,7 @@ function find_components(numLoops, loops, componentParamDict)
                     end
                 end
             elseif (lowercase(input) == "ac")
-                println("What is the amplitude and frequency of $comp (V, Hz)?")
+                println("What is the amplitude and frequency of $comp (V, ω)?")
                 try
                     input = split(readline(), ',')
                     componentParamDict[comp]=(Meta.parse(input[1]), Meta.parse(input[2]))
@@ -187,7 +187,7 @@ function find_components(numLoops, loops, componentParamDict)
                     end
                 end
             elseif (lowercase(input) == "ac")
-                println("What is the amplitude and frequency of $comp (A, Hz)?")
+                println("What is the amplitude and frequency of $comp (A, ω)?")
                 try
                     input = split(readline(), ',')
                     componentParamDict[comp]=(Meta.parse(input[1]), Meta.parse(input[2]))
@@ -550,23 +550,4 @@ function edit_netlist(name)
     close(file)
 
     process_netlist(name)   #Reprocess data in case any changes have been made to circuit structure
-end
-
-#User input to enter edit or create functions
-while true  
-    println(" --- Enter 'E' to edit an existing netlist  --- ")
-    println(" --- Enter 'N' to create new netlist  --- ")
-    println(" --- Enter '~' to exit program  --- ")
-    input = readline()
-    if (uppercase(input) == "E")
-        println(" --- Enter filename (excluding '.jld2')  --- ")
-        input = readline()
-        edit_netlist("$input")
-    elseif (uppercase(input) == "N")
-        println(" --- Enter filename (excluding '.jld2')  --- ")
-        input = readline()
-        new_netlist("$input")
-    elseif (input == "~")
-        exit()
-    end
 end

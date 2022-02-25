@@ -39,7 +39,7 @@ end
 function build_JJ(;name, I0 = 1.0, R = 1.0, C = 1.0) #Builds ODESystem for Josephson Junction using Component structure
     @named component = build_component()    #Create new component
     @unpack θ, i = component                #Extract variables from component
-    ps = @parameters I0=I0, R=R, C=C        #Define parameter
+    ps = @parameters (I0=I0, R=R, C=C)        #Define parameter
     eqs = [
             D2(θ) ~ (i - I0*sin(θ) - D(θ)*Φ₀/(2*pi*R))*(2*pi)/(Φ₀*C)    #Differential equation defining θ I0, R and C relationship
           ]
@@ -50,7 +50,7 @@ end
 function build_voltage_source(;name, V = 1.0, ω = 0.0) #Builds ODESystem for Voltage Source (AC or DC) using Component structure
     @named component = build_component()    #Create new component
     @unpack θ, i = component                #Extract variables from component
-    ps = @parameters V=V, ω=ω               #Define parameters
+    ps = @parameters (V=V, ω=ω)               #Define parameters
     eqs = [
             D(θ)~ - V*cos(ω*t)*2*pi/Φ₀      #Differential equation defining θ, ω and V relationship
           ]
@@ -77,7 +77,7 @@ function build_current_source_loop(;name, I = 1.0, ω = 0.0) #Builds ODESystem f
     @named loop = build_loop()              #Create new loop
     @unpack sys = loop                      #Extract variables from loop
     @unpack iₘ, Φₗ = sys                    
-    ps = @parameters I=I, ω=ω               #Define parameters
+    ps = @parameters (I=I, ω=ω)               #Define parameters
     eqs = [
             0 ~ iₘ - I*cos(ω*t)             #Equation defining relationship between θ, ω and I
           ]

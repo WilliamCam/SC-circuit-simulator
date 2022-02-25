@@ -1,3 +1,16 @@
+Important: In Julia REPL when the user is asked for an input the initial input is not recognised however the 
+           second and all other user input will be recognised.
+^--------- Useful to know if using symbolic_assign() or net_edit() in 'sim_model.jl'
+
+******************************************************************************************************************
+***	                                           How to use                                                ***
+******************************************************************************************************************
+
+1. Run "run_netlist.jl" (Best to run from terminal as Julia REPL is sometimes clunky with readline()) to create 
+   a new circuit 
+2. If you made any mistakes use the edit function (Accessible thorugh "run_netlist.jl")
+3. Run commands from "sim_model.jl" to simulate
+
 ******************************************************************************************************************
 ***	                                      create_netlist.jl                                                ***
 ******************************************************************************************************************
@@ -6,6 +19,8 @@ The file create_netlist.jl is a program used to create and edit circuit 'netlist
 terms of loops and components. These 'netlists' are used in sim_model.jl to simulate a circuit.
 
 jdl2 files cannot be edited with a text editor hence to edit a netlist use the edit function in create_netlist.jl
+
+Use run_netlist.jl to use create_netlist.
 
 ------------------------------------------------------------------------------------------------------------------
 ---	                                    Creating a new netlist			       		       ---
@@ -96,3 +111,8 @@ the model building process.
 ******************************************************************************************************************
 ***	                                         sim_model.jl                                                  ***
 ******************************************************************************************************************
+
+The help function in sim_model.jl gives some instructions on how to use the program
+
+Note: using sim_model.jl in terminal is untested and may not function as intended
+It is recommended that sim_model.jl is run through a Julia REPL

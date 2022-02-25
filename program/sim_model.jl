@@ -1,5 +1,6 @@
 using JLD2, FileIO, ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra, Statistics, Dates
 include("model_builder.jl")
+include("create_netlist.jl")
 
 #Display function uses
 function help()
@@ -9,16 +10,18 @@ function help()
     println("Use 'open_file(name)' to open an existing .jdl2 file to extract circuit data")
     println()
     println("Use 'symbolic_assign()' to input numerical values for variables that are still in symbolic form")
+    println("   - Symbolically assigned variables are temporary only, upon using net_edit() to change parameters symbolic variables return")
     println()
-    println("Use 'edit_param()' to edit Component parameters")
-    println("   - Component parameters can also be edited by entering 'CPD[component] = new_parameter'")
-    println("   WARNING: Changing a components inductance in sim_model.jl will not work as the inductance matrix (L) is not re-evaluated")
+    println("Use 'net_edit(name)' to edit a netlist")
+    println("   - After using net_edit(), open_file() must be called again to load correct data")
+    println("   - Component parameters can also be edited by entering 'CPD[component] = new_parameter', (THIS IS TEMPORARY)")
     println()
     println("Use 'build(Φext)' to build the circuit based on the open file where Φext is the total external flux through the circuit")
     println()
     println("Use 'solve_init(old_u0, t_end)' to solve initial conditions for the model")
     println()
-    println("Use 'tspan(u0, t_init, t_end)' to solve for a given timespan")
+    println("Use 'sim_solve(u0, t_init, t_end)' to solve for a given timespan")
+    println("   - A specific solver algorithm can be used for sim_solve() by adding solver=ROS3P() as a parameter for example")
     println()
     println("Use 'single_plot(comp, param)' to plot the voltage or current through a component")
     println("   - To plot voltage enter 'V' as the param")
@@ -93,72 +96,8 @@ function symbolic_assign()  #Does not work for AC voltage/current sources
 end
 
 #Edit parameters while in program
-function edit_param()
-    while true
-        display(CPD)         #Display the current CPD
-        println()
-        println("Enter a component followed by '>' followed by it's new parameter. E.g. to change Ra from 2 Ohm to 3 Ohm enter Ra>3")
-        println("For JJ's enter comma seperated parameters e.g. J1>10e-6,27,3.24,50e-3")
-        println("Enter ~ when finished editing parameters")
-        input = readline()
-        if (input == "~")
-            break                           #Exit edit component parameters
-        end
-        comp_param = split(input, '>')
-        if (comp_param[1] in keys(CPD))  #Check if component exists
-            if startswith(comp_param[1], 'J')           #Josephson Junction case
-                params = split(comp_param[2], ',')
-                param_a = []
-                for p in params
-                    try
-                        input = Meta.parse(p)
-                    catch e
-                        if isa(e, MethodError)
-                            input = parse(Float64, p)
-                        end
-                    end
-                    push!(param_a, input)
-                end
-                CPD[comp_param[1]] = param_a
-            elseif (startswith(comp_param[1], 'I') || startswith(comp_param[1], 'V')) #Current/Voltage source case
-                params = split(comp_param[2], ',')
-                if (length(params) == 2)
-                    param_a = []
-                    for p in params
-                        try
-                            input = Meta.parse(p)
-                        catch e
-                            if isa(e, MethodError)
-                                input = parse(Float64, p)
-                            end
-                        end
-                        push!(param_a, input)
-                    end
-                    CPD[comp_param[1]] = param_a
-                else
-                    try
-                        input = Meta.parse(comp_param[2])
-                    catch e
-                        if isa(e, MethodError)
-                            input = parse(Float64, input)
-                        end
-                    end
-                    CPD[comp_param[1]] = input
-                end
-            else                                        #All other components
-                try
-                    input = Meta.parse(comp_param[2])
-                catch e
-                    if isa(e, MethodError)
-                        input = parse(Float64, input)
-                    end
-                end
-                CPD[comp_param[1]] = input
-            end
-        else
-            println("Component does not exist, try agian")
-        end
-    end
+function net_edit(name)
+    edit_netlist(name)
 end
 
 #Build the circuit based on the open file
@@ -182,7 +121,7 @@ function build(Φext)
             if (length(param) == 1)                         #DC current source case
                 new_l = "@named loop$(i-1) = build_current_source_loop(I = $(param))"
             else                                            #AC current source case
-                new_l = "@named loop$(i-1) = build_current_source_loop(I = $(param[1]), ω = $(1/param[2]))"
+                new_l = "@named loop$(i-1) = build_current_source_loop(I = $(param[1]), ω = $(param[2]))"
             end
             new_l = Meta.parse(new_l)
             new_l = eval(new_l)
@@ -214,7 +153,7 @@ function build(Φext)
             if (length(param) == 1)                         #DC voltage case
                 new_c = "@named $j = build_voltage_source(V = $param)"
             else                                            #AC voltage case
-                new_c = "@named $j = build_voltage_source(V = $(param[1]), ω = $(1/param[2]))"
+                new_c = "@named $j = build_voltage_source(V = $(param[1]), ω = $(param[2]))"
             end
             new_c = Meta.parse(new_c)
             new_c = eval(new_c)
@@ -270,19 +209,25 @@ end
 function solve_init(old_u0, t_end)
     tspan_ini = (0.0, t_end)                                #Create a timespan
     prob = ODEProblem(new_model, old_u0, tspan_ini, save_everystep = false, progress=true)  #Create an ODEProblem to solve for a specified time only saving the final component variable values
-    sol = solve(prob)                                       #Solve the ODEProblem
+    sol = solve(prob, ROS3P())                                       #Solve the ODEProblem
     new_u0 = sol[:,end]                                     #Set the new initial conditions to the 
     return new_u0                                           #return the new intial conditions
 end
 
 #Give a timespan for the simulation and solve
-function tspan(u0, t_init, t_end)
-    new_u0 = solve_init(u0, t_init)                         #Find the initial conditions for the start time
+function sim_solve(u0, t_init, t_end, solver="none")
     tspan = (parse(Float64, t_init), parse(Float64, t_end)) #Create a timespan
-    tsaves = LinRange(tspan[1],tspan[2], 50000)             #Create tsaves
-    prob = ODEProblem(new_model, new_u0, tspan, saveat=tsaves, progress=true)   #Create an ODEProblem to solve for a specified time
-    sol = solve(prob)                                       #Solve the ODEProblem
-    return sol                                              #Return the solved ODEProblem
+    if (t_init != 0.0)
+        u0 = solve_init(u0, tspan[1])                           #Find the initial conditions for the start time
+    end
+    tsaves = LinRange(tspan[1],tspan[2], 50000)                 #Create tsaves
+    prob = ODEProblem(new_model, u0, tspan, saveat=tsaves, progress=true)   #Create an ODEProblem to solve for a specified time
+    if (solver == "none")                                       #No solver specified
+        sol = solve(prob)                                       #Solve the ODEProblem
+    else
+        sol = solve(prob, solver)                               #Use specified solver to solve ODEProblem
+    end
+    return sol                                                  #Return the solved ODEProblem
 end
 
 #Plot a single component
@@ -301,6 +246,7 @@ function single_plot(comp, param)
             ex = Meta.parse(str)
             vs = Φ₀/2pi*sol[eval(ex)]                       #Multiply by constant (conversion from θ to V)
             ts = sol[t]                                     #Timespan
+            #p = plot(ts[20000:end], vs[20000:end], label="$comp.$param", ylims=:round)                #Plot the component voltage vs time
             p = plot(ts, vs, label="$comp.$param", ylims=:round)                #Plot the component voltage vs time
             xlabel!("Time")                                 #Add axis labels
             ylabel!("Voltage")
@@ -347,15 +293,23 @@ end=#
 
 ###  Commands running from Julia REPL
 help()
-numLoops, CPD, junctions, loops, k, L, σA, componentPhaseDirection = open_file("ishaan")
-symbolic_assign()  #readline() in RELP has some issue where the first line is not read
-edit_param()       #readline() in RELP has some issue where the first line is not read
-new_model, u0 = build(3Φ₀)
-u0 = solve_init(u0, 1e-6)
-sol = tspan(u0, "0.0", "1e-9")
+net_edit("circuits/ishaan")             #readline() in RELP has some issue where the first line is not read
+numLoops, CPD, junctions, loops, k, L, σA, componentPhaseDirection = open_file("circuits/ishaan")
+symbolic_assign()                       #readline() in RELP has some issue where the first line is not read
+new_model, u0 = build(3Φ₀);
+u0 = solve_init(u0, 1e-7)
+sol = sim_solve(u0, "0", "1e-7", ROS3P())
+
 single_plot("C3","V")
 single_plot("J4","V")
 
+ts = sol[t];  
+vs1 = Φ₀/2pi*sol[D(C3.sys.θ)];
+vs2 =  Φ₀/2pi*sol[D(J4.sys.θ)];
+plot(ts, vs1, label="C3.V");
+plot!(ts, vs2, label="J4.V");
+xlabel!("Time");
+ylabel!("Voltage")
 #=## Run from terminal commands
 println(" --- Enter 'help' if you need help --- ")
 println(" --- Enter '~' to exit program  --- ")
@@ -372,10 +326,10 @@ while true
     elseif startswith(lowercase(input), "solve_init")   #Pass through model form build()?
         si = split(strip(input[12:end-1]),',')
         solve_init(strip(si[1]), strip(si[2]))
-    elseif startswith(lowercase(input), "tspan")        #Pass through model form build()?
-        ts = split(strip(input[7:end-1]),',')   
-        tspan(strip(ts[1]), strip(ts[2]), strip(ts[3]))
-    elseif startswith(lowercase(input), "single_plot")  #Pass through solution form tspan()?
+    elseif startswith(lowercase(input), "sim_solve")        #Pass through model form build()?
+        ts = split(strip(input[11]:end-1]),',')   
+        sim_solve(strip(ts[1]), strip(ts[2]), strip(ts[3]))
+    elseif startswith(lowercase(input), "single_plot")  #Pass through solution form sim_solve()?
         s_plot = split(input[13:end-1], ',')
         single_plot(strip(s_plot[1]), strip(s_plot[2]))
     elseif startswith(lowercase(input), "edit_param")   #Pass through CPD?
