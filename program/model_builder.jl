@@ -90,9 +90,9 @@ end
 
 #Function to form  Φₗ = L . iₘ for a loop
 function inductance(eqs::Vector{Equation}, L, built_loops)
-    for i in 1:length(built_loops)                                      #Loop through all loops built using MTK
-        if (string(built_loops[i])[1:4] == "Loop")                      #Check that loop is not a current source loop
-            push!(eqs, built_loops[i].sys.Φₗ ~ dot(L[:,i], [l.sys.iₘ for l in built_loops]))    #Find Φₗ = L . iₘ  for each loop
+    for i in 1:length(built_loops)                                                          #Loop through all loops built using MTK
+        if occursin("CurrentSourceLoop", string(built_loops[i])) == false                    #Check that loop is not a current source loop
+            push!(eqs, built_loops[i].sys.Φₗ ~ dot(L[:,i], [l.sys.iₘ for l in built_loops])) #Find Φₗ = L . iₘ  for each loop
         end
     end
 end

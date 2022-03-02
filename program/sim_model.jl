@@ -53,7 +53,6 @@ function open_file(name)
     #componentLoopDict = read(file, "editing/componentLoopDict")
     global CPD = read(file, "editing/componentParamDict")
     #mutualInd = read(file, "editing/mutualInd")
-    global parameter_names = read(file, "editing/params")
     global junctions = read(file, "editing/junctions")
     global loops = read(file, "editing/loops")
     global k = read(file, "matrices/k")
@@ -61,21 +60,30 @@ function open_file(name)
     global σA = read(file, "matrices/σA")
     #σB = read(file, "matrices/σB")
     global componentPhaseDirection = read(file, "matrices/componentPhaseDirection")
+    global parameter_names = read(file, "editing/params")
+
+    for ii in 1:length(parameter_names)
+        parameter_names[ii] = parameter_names[ii][1]
+    end
     close(file)
+
     print("File loaded \n circuit parameters:")
     for param in parameter_names
-        print(string(param[1]) * "\n")
+        print(string(param) * "\n")
     end
 end
 
 #Build the circuit based on the open file
-function build(Φext)
+function build(Φext, ps_string)
+
     eqs = Equation[]                                        #Array to store equations
 
     built_loops = []                                       #Array to store loops that have been built using MTK
     for param in parameter_names                            #Declaring all named parameters as MTK parameters
-        eval(Meta.parse("@parameters " * string(param[1])))                
+        eval(Meta.parse("@parameters " * string(param)))                
     end
+
+    ps = eval(Meta.parse(ps_string))
 
     for i in 1:numLoops                                     #Iterate through all loops
         println("loop $(i)")                              #Display loop name
@@ -155,17 +163,17 @@ function build(Φext)
         add_loop!(eqs, built_loops[i], σA[i,:], built_components)
     end
 
-    # @named _model  =  ODESystem(eqs, t, ps)                     #Create an ODESystem with the existing equations
+    @named _model  =  ODESystem(eqs, t, [], parameter_names)                     #Create an ODESystem with the existing equations
 
-    # @named model = compose(_model, sys)                     #Compose the existing ODESystem with the system states vector
+    @named model = compose(_model, sys)                     #Compose the existing ODESystem with the system states vector
 
-    # println()
-    # display(equations(model))                               #Display model equations
-    # println()
-    # display(states(model))                                  #Display model states
-    # println()
-    # new_model = structural_simplify(model)                  #structural_simplify Algorithm to improve performance
-    return eqs, built_loops #ew_model, u0                                    #Return structuraly simplified model and initial conditions
+    println()
+    display(equations(model))                               #Display model equations
+    println()
+    display(states(model))                                  #Display model states
+    println()
+    new_model = structural_simplify(model)                  #structural_simplify Algorithm to improve performance
+    return new_model, u0                                    #Return structuraly simplified model and initial conditions
 end
 
 #Solve initial conditions
