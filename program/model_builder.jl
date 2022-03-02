@@ -85,7 +85,7 @@ end
 function add_loop!(
     eqs::Vector{Equation},l, σ::Vector, cs
     )
-    push!(eqs,0 ~ l.sys.Φₑ-l.sys.Φₗ - dot([Φ₀/(2*pi)*c.sys.θ for (n, c) in cs], σ)) # Φₑ - Φₗ = σA . θ for current loop
+    push!(eqs,l.sys.Φₗ ~ l.sys.Φₑ - dot([Φ₀/(2*pi)*c.sys.θ for (n, c) in cs], σ)) # Φₑ - Φₗ = σA . θ for current loop
 end
 
 #Function to form  Φₗ = L . iₘ for a loop

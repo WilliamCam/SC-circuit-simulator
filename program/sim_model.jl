@@ -131,7 +131,7 @@ function build(Φext, ps_string)
             built_components[j] = new_c
         elseif (j[1] == 'J')                                #Built Josephson Junction case
             params = get(CPD, j, 0)
-            new_c = "@named $j = build_JJ($(params[1]), $(params[2]), $(params[3]))"
+            new_c = "@named $j = build_JJ(I0 = $(params[1]), R = $(params[2]), C = $(params[3]))"
             new_c = Meta.parse(new_c)
             new_c = eval(new_c)
             built_components[j] = new_c
@@ -157,23 +157,24 @@ function build(Φext, ps_string)
     sys = Vector{ODESystem}(old_sys)                        #Convert system states array to an ODESystem vector form
 
     #Functions from model_builder.jl to form appropriate equations
-    inductance(eqs, L, built_loops)
-    current_flow(eqs, componentPhaseDirection, built_loops, built_components)
     for i in 1:numLoops
         add_loop!(eqs, built_loops[i], σA[i,:], built_components)
     end
+    current_flow(eqs, componentPhaseDirection, built_loops, built_components)
+    inductance(eqs, L, built_loops)
+    
+    
 
     @named _model  =  ODESystem(eqs, t, [], parameter_names)                     #Create an ODESystem with the existing equations
 
     @named model = compose(_model, sys)                     #Compose the existing ODESystem with the system states vector
-
     println()
     display(equations(model))                               #Display model equations
     println()
     display(states(model))                                  #Display model states
     println()
     new_model = structural_simplify(model)                  #structural_simplify Algorithm to improve performance
-    return new_model, u0                                    #Return structuraly simplified model and initial conditions
+    return sys, eqs, parameter_names                                #Return structuraly simplified model and initial conditions
 end
 
 #Solve initial conditions
