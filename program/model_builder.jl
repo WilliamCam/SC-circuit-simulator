@@ -17,44 +17,41 @@ end
 function build_resistor(;name, R = 1.0) #Builds ODESystem for resistor using Component structure
     @named component = build_component()    #Create new component
     @unpack θ, i = component                #Extract variables from component
-    ps = @parameters R=R                    #Define parameter
     eqs = [
             D(θ)~i*(2*pi*R)/Φ₀              #Differential equation defining θ and R relationship
           ]
-    sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
+    sys = extend(ODESystem(eqs, t, [], []; name=name), component)
     Component(sys)
 end
 
 function build_capacitor(;name, C = 1.0) #Builds ODESystem for capacitor using Component structure
     @named component = build_component()    #Create new component
     @unpack θ, i = component                #Extract variables from component
-    ps = @parameters C=C                    #Define parameter
+     
     eqs = [
             D2(θ)~i*2*pi/(Φ₀*C)             #Differential equation defining θ and C relationship
           ]
-    sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
+    sys = extend(ODESystem(eqs, t, [], []; name=name), component)
     Component(ode_order_lowering(sys))
 end
 
 function build_JJ(;name, I0 = 1.0, R = 1.0, C = 1.0) #Builds ODESystem for Josephson Junction using Component structure
     @named component = build_component()    #Create new component
     @unpack θ, i = component                #Extract variables from component
-    ps = @parameters (I0=I0, R=R, C=C)        #Define parameter
     eqs = [
             D2(θ) ~ (i - I0*sin(θ) - D(θ)*Φ₀/(2*pi*R))*(2*pi)/(Φ₀*C)    #Differential equation defining θ I0, R and C relationship
           ]
-    sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
+    sys = extend(ODESystem(eqs, t, [], []; name=name), component)
     Component(ode_order_lowering(sys))
 end
 
 function build_voltage_source(;name, V = 1.0, ω = 0.0) #Builds ODESystem for Voltage Source (AC or DC) using Component structure
     @named component = build_component()    #Create new component
     @unpack θ, i = component                #Extract variables from component
-    ps = @parameters (V=V, ω=ω)               #Define parameters
     eqs = [
             D(θ)~ - V*cos(ω*t)*2*pi/Φ₀      #Differential equation defining θ, ω and V relationship
           ]
-    sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
+    sys = extend(ODESystem(eqs, t, [], []; name=name), component)
     Component(sys)
 end
 
@@ -63,8 +60,8 @@ struct Loop
 end
 
 function build_loop(;name, Φₑ = 0.0) #Builds ODESystem for general loop using Loop structure
-    sts = @variables iₘ(t) = 0.0 Φₗ(t)=0.0
-    ps = @parameters Φₑ = Φₑ                #Define parameter
+    sts = @variables iₘ(t) = 0.0 Φₗ(t) = 0.0
+    ps = @parameters Φₑ
     sys = ODESystem(Equation[], t, sts, ps, name=name)
     Loop(sys)
 end
@@ -73,15 +70,14 @@ struct CurrentSourceLoop
     sys::ODESystem
 end
 
-function build_current_source_loop(;name, I = 1.0, ω = 0.0) #Builds ODESystem for Current Source (AC or DC) loop using Loop structure
-    @named loop = build_loop()              #Create new loop
+function build_current_source_loop(;name, I = 1.0, ω = 0.0, Φₑ = 0.0) #Builds ODESystem for Current Source (AC or DC) loop using Loop structure
+    @named loop = build_loop(Φₑ = Φₑ)              #Create new loop
     @unpack sys = loop                      #Extract variables from loop
-    @unpack iₘ, Φₗ = sys                    
-    ps = @parameters (I=I, ω=ω)               #Define parameters
+    @unpack iₘ, Φₗ = sys                   
     eqs = [
             0 ~ iₘ - I*cos(ω*t)             #Equation defining relationship between θ, ω and I
           ]
-    sys = extend(ODESystem(eqs, t, [], ps, name=name), loop.sys)
+    sys = extend(ODESystem(eqs, t, [], [], name=name), loop.sys)
     CurrentSourceLoop(sys)
 end
 
