@@ -52,9 +52,6 @@ function process_netlist(name)
     mutualInd = read(file, "editing/mutualInd")
     junctions = read(file, "editing/junctions")
     loops = read(file, "editing/loops")
-    k = read(file, "matrices/k")
-    parameter_names = read(file, "editing/params")
-    inductor_names = read(file, "editing/inductors")
     close(file)
 
     #Open file in write mode, clearing existing data
@@ -99,7 +96,6 @@ function process_netlist(name)
     file["editing/junctions"] = junctions
     file["editing/numLoops"] = numLoops
     file["editing/mutualInd"] = mutualInd
-    file["matrices/k"] = k
     file["matrices/σA"] = σA
     file["matrices/σB"] = σB
     file["matrices/componentPhaseDirection"] = componentPhaseDirection
@@ -133,7 +129,7 @@ function new_netlist(name)
     end
 
     componentParamDict = Dict()
-    componentLoopDict, componentParamDict, junctions, paramater_names = find_components(numLoops, loops, componentParamDict) #Find component parameters and store in dicts
+    componentLoopDict, componentParamDict, junctions = find_components(numLoops, loops, componentParamDict) #Find component parameters and store in dicts
 
     println("Enter any mutually coupled loops:\nE.g. if loop 1 and 2 are coupled with mutual inductance M12 enter\n'1,2'\n(Enter '~' when all are listed)")
     while true
@@ -164,9 +160,6 @@ function new_netlist(name)
     file["editing/junctions"] = junctions
     file["editing/numLoops"] = numLoops
     file["editing/mutualInd"] = mutualInd
-    file["editing/params"] = paramater_names
-    file["matrices/k"] = extern_flux
-    file["editing/inductors"] = inductor_names
     close(file)
 
     process_netlist(name)
@@ -181,7 +174,6 @@ function edit_netlist(name)
     mutualInd = read(file, "editing/mutualInd")
     junctions = read(file, "editing/junctions")
     loops = read(file, "editing/loops")
-    k = read(file, "matrices/k")
     L = read(file, "matrices/L")
     σA = read(file, "matrices/σA")
     σB = read(file, "matrices/σB")
@@ -332,7 +324,6 @@ function edit_netlist(name)
     file["editing/junctions"] = junctions
     file["editing/numLoops"] = numLoops
     file["editing/mutualInd"] = mutualInd
-    file["matrices/k"] = k
     file["matrices/L"] = L
     file["matrices/σA"] = σA
     file["matrices/σB"] = σB

@@ -55,7 +55,6 @@ function open_file(name)
     global mutualInd = read(file, "editing/mutualInd")
     global junctions = read(file, "editing/junctions")
     global loops = read(file, "editing/loops")
-    global k = read(file, "matrices/k")
     global σA = read(file, "matrices/σA")
     #σB = read(file, "matrices/σB")
     global componentPhaseDirection = read(file, "matrices/componentPhaseDirection")
@@ -68,7 +67,7 @@ end
 
 #Generates loop inductance matrix
 function build_L_matrix()
-    L = []
+    L = zeros(Num, numLoops,numLoops)
     ### Algorithm for finding L
     for j in 1:numLoops                                         #Iterate through all loops
         current_row = []
@@ -102,10 +101,11 @@ function build_L_matrix()
             end
             push!(current_row, Lij)                      #Lij is pushed to current_row 
         end 
-        L = [L; current_row']                                   #current_row is pushed to the L matrix
+        #L = [L; current_row']
+        L[j,:] = current_row'                                #current_row is pushed to the L matrix
     end
 
-    return transpose(L)
+    return L
 end
 
 #Build the circuit based on the open file
@@ -221,18 +221,15 @@ function solve_init(model, old_u0, p_string, t_end)
 end
 
 #Give a timespan for the simulation and solve
-function sim_solve(u0, t_init, t_end, solver="none")
-    tspan = (parse(Float64, t_init), parse(Float64, t_end)) #Create a timespan
+function sim_solve(model, u0, t_init, t_end, ps_string)
+    ps = eval(Meta.parse(ps_string))
+    tspan = (t_init, t_end) #Create a timespan
     if (t_init != 0.0)
         u0 = solve_init(u0, tspan[1])                           #Find the initial conditions for the start time
     end
     tsaves = LinRange(tspan[1],tspan[2], 50000)                 #Create tsaves
-    prob = ODEProblem(new_model, u0, tspan, saveat=tsaves, progress=true)   #Create an ODEProblem to solve for a specified time
-    if (solver == "none")                                       #No solver specified
-        sol = solve(prob)                                       #Solve the ODEProblem
-    else
-        sol = solve(prob, solver)                               #Use specified solver to solve ODEProblem
-    end
+    prob = ODEProblem(model, u0, tspan, ps, saveat=tsaves, progress=true)   #Create an ODEProblem to solve for a specified time
+    sol = solve(prob, ROS3P(), maxiters=1e9, abstol = 1e-6)
     return sol                                                  #Return the solved ODEProblem
 end
 
