@@ -9,7 +9,6 @@ end
 function find_components(numLoops, loops, componentParamDict)
     componentLoopDict = Dict()                  #Dictionary with components as keys and loops as values (used to find unique elements)
     junctions = []                              #Stores the names of the junctions
-    parameter_names = []
     for i in 1:numLoops                         #Iterate through all loops to find unique circuit components      
         for j in 1:length(loops[i])             #Iterate components in current loop
             componentLoopDict[loops[i][j]]=push!(get(componentLoopDict, loops[i][j], []), i-1) #Forms dict with unique circuit elements
@@ -24,40 +23,23 @@ function find_components(numLoops, loops, componentParamDict)
             continue
         elseif (comp[1] == 'V')                 #Gather data about voltage source 
             push!(junctions, comp)
-            eval(Meta.parse("@variables " * comp *"_V"))
-            eval(Meta.parse("@variables " * comp *"_w"))
-            push!(parameter_names, eval(Meta.parse(comp * "_V" )), eval(Meta.parse(comp * "_w")))
-            componentParamDict[comp] = (eval(Meta.parse(comp * "_V" )), eval(Meta.parse(comp * "_w")))
+            componentParamDict[comp] = 1.0
         elseif (comp[1] == 'I')                 #Gather data about current source
-            eval(Meta.parse("@variables " * comp *"_I"))
-            eval(Meta.parse("@variables " * comp *"_w"))
-            push!(parameter_names, eval(Meta.parse(comp * "_I" )), eval(Meta.parse(comp * "_w")))
-            componentParamDict[comp] = (eval(Meta.parse(comp * "_I" )), eval(Meta.parse(comp * "_w")))
+            componentParamDict[comp] = 1.0
         elseif (comp[1] == 'R')                 #Gather data about resistor
             push!(junctions, comp)
-            eval(Meta.parse("@variables " * comp))
-            push!(parameter_names,  eval(Meta.parse("@variables " * comp)))
-            componentParamDict[comp] = eval(Meta.parse(comp))
+            componentParamDict[comp] = 1.0
         elseif (comp[1] == 'C')                 #Gather data about capacitor
             push!(junctions, comp)
-            eval(Meta.parse("@variables " * comp))
-            push!(parameter_names,  eval(Meta.parse("@variables " * comp)))
-            componentParamDict[comp] = eval(Meta.parse(comp))
+            componentParamDict[comp] = 1.0
         elseif (comp[1] == 'L')                 #Gather data about inductor
-            eval(Meta.parse("@variables " * comp))
-            push!(parameter_names,  eval(Meta.parse("@variables " * comp)))
-            componentParamDict[comp] = eval(Meta.parse(comp))
+            componentParamDict[comp] = 1.0
         elseif (comp[1] == 'J')                 #Gather data about josephson junction
             push!(junctions, comp)
-            eval(Meta.parse("@variables " * comp *"_I0"))
-            eval(Meta.parse("@variables " * comp *"_R"))
-            eval(Meta.parse("@variables " * comp *"_C"))
-            eval(Meta.parse("@variables " * comp *"_L"))
-            push!(parameter_names,  eval(Meta.parse(comp * "_I0" )),eval(Meta.parse(comp * "_R")), eval(Meta.parse(comp * "_C")), eval(Meta.parse(comp * "_L")))
-            componentParamDict[comp] = (eval(Meta.parse(comp * "_I0" )), eval(Meta.parse(comp * "_R")), eval(Meta.parse(comp * "_C")), eval(Meta.parse(comp * "_L")))
+            componentParamDict[comp] = 1.0
         end
     end
-    return componentLoopDict, componentParamDict, junctions, parameter_names
+    return componentLoopDict, componentParamDict, junctions
 end
 
 #Use existing circuit data to form k, L, σA, σB and componentPhaseDirection
@@ -72,48 +54,15 @@ function process_netlist(name)
     loops = read(file, "editing/loops")
     k = read(file, "matrices/k")
     parameter_names = read(file, "editing/params")
+    inductor_names = read(file, "editing/inductors")
     close(file)
 
     #Open file in write mode, clearing existing data
     file = jldopen("$name.jld2", "w") #Open file to write new data
 
-    #Initialise L, σB matrices, and componentPhaseDirection dictionary
-    L = zeros(Num, 0, numLoops)            
+    #Initialise σB matrices, and componentPhaseDirection dictionary            
     σB = zeros(Num, 0, numLoops)           
     componentPhaseDirection = Dict() 
-
-    ### Algorithm for finding L
-    for j in 1:numLoops                                         #Iterate through all loops
-        current_row = []
-        for i in 1:numLoops                                     #Second iteration through all loops
-            Lij = 0.0                                    #Float storing the value of the (j,i) position in matrix L
-            #SELF COUPLING
-            for n in loops[i]                                   #Iterate through components in loop i
-                if ((n[1] == 'J') || (n[1] == 'L'))
-                    if (j-1 in get(componentLoopDict, n, -1))   #If component n is also in the loop j
-                        if (n[1] == 'J')
-                            param = get(componentParamDict, n, 0)[4]    #JJ case for setting param
-                        elseif (n[1] == 'L')    
-                            param = get(componentParamDict, n, 0)       #Inductor case for setting param
-                        end
-                        if (i == j)
-                            Lij = Lij + param     #Adjust Lij by the value of the inductance of component n
-                        else
-                            Lij = Lij - param     #Adjust Lij by the value of the inductance of component n
-                        end
-                    end
-                end
-            end
-            #MUTUAL COUPLING
-            for n in mutualInd
-                if ((i != j) && (i-1 in n[1]) && (j-1 in n[1])) #If the two currently observed loops are not the same loop and are stated as having mutual inductance
-                    Lij = Lij - n[2]              #Adjust Lij by the value of the mutual inductance
-                end
-            end
-            push!(current_row, Lij)                      #Lij is pushed to current_row 
-        end 
-        L = [L; current_row']                                   #current_row is pushed to the L matrix
-    end
 
     ### Algorithm for finding σB & σA & componentPhaseDirection
     for i in 1:length(junctions)                                #Iterate through junctions
@@ -141,7 +90,6 @@ function process_netlist(name)
     end
 
     #Set matrices as transpose of existing matrices
-    L = transpose(L)
     σA = transpose(σB)
 
     #Save data to file and close
@@ -151,9 +99,7 @@ function process_netlist(name)
     file["editing/junctions"] = junctions
     file["editing/numLoops"] = numLoops
     file["editing/mutualInd"] = mutualInd
-    file["editing/params"] = parameter_names
     file["matrices/k"] = k
-    file["matrices/L"] = L
     file["matrices/σA"] = σA
     file["matrices/σB"] = σB
     file["matrices/componentPhaseDirection"] = componentPhaseDirection
@@ -189,42 +135,6 @@ function new_netlist(name)
     componentParamDict = Dict()
     componentLoopDict, componentParamDict, junctions, paramater_names = find_components(numLoops, loops, componentParamDict) #Find component parameters and store in dicts
 
-    println("Enter the external flux through each loop in units of πΦ₀:\n e.g. '0.0, 0.0, 0.5'")
-    input = readline()                          #External flux input
-    if (input != "")                            #Error handling
-        flux = split(input, ',')
-        for i in 1:length(flux)
-            f = strip(flux[i])
-            println(f)
-            f = split(f, '/')
-            if (length(f) == 1) 
-                try
-                    push!(extern_flux, parse(Float64, f[1]))
-                catch e
-                    if isa(e, ArgumentError)
-                        println(" --- Values must be passed as floats ---")
-                    end
-                end
-            elseif (length(f) == 2)
-                f1 = -1.0
-                f2 = -1.0
-                try
-                    f1 = parse(Float64, f[1])
-                    f2 = parse(Float64, f[2]) 
-                catch e
-                    if isa(e, ArgumentError)
-                        println(" --- Values must be passed as floats ---")
-                    end
-                end
-                if (f2 == 0)
-                    println(" --- Cannot divide by 0 ---")
-                else
-                    push!(extern_flux, f1/f2)
-                end
-            end
-        end
-    end
-
     println("Enter any mutually coupled loops:\nE.g. if loop 1 and 2 are coupled with mutual inductance M12 enter\n'1,2'\n(Enter '~' when all are listed)")
     while true
         input = readline()                      #Mutual flux input
@@ -237,8 +147,6 @@ function new_netlist(name)
                 throw(error)
             end
             mutualTuple = (parse(Int8, currentMutual[1]), parse(Int8, currentMutual[2]))
-            eval(Meta.parse("@variables M" * string(mutualTuple[1]) * string(mutualTuple[2])))
-            mutualTuple = (mutualTuple, eval(Meta.parse("M"*string(mutualTuple[1]) * string(mutualTuple[2]))))
             push!(mutualInd, mutualTuple)
         catch e
             if isa(e, ArgumentError)
@@ -258,7 +166,7 @@ function new_netlist(name)
     file["editing/mutualInd"] = mutualInd
     file["editing/params"] = paramater_names
     file["matrices/k"] = extern_flux
-
+    file["editing/inductors"] = inductor_names
     close(file)
 
     process_netlist(name)

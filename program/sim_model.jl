@@ -50,40 +50,72 @@ function open_file(name)
     end
     #file = jldopen("$f_name.jld2", "r")
     global numLoops = read(file, "editing/numLoops")
-    #componentLoopDict = read(file, "editing/componentLoopDict")
+    global componentLoopDict = read(file, "editing/componentLoopDict")
     global CPD = read(file, "editing/componentParamDict")
-    #mutualInd = read(file, "editing/mutualInd")
+    global mutualInd = read(file, "editing/mutualInd")
     global junctions = read(file, "editing/junctions")
     global loops = read(file, "editing/loops")
     global k = read(file, "matrices/k")
-    global L = read(file, "matrices/L")
     global σA = read(file, "matrices/σA")
     #σB = read(file, "matrices/σB")
     global componentPhaseDirection = read(file, "matrices/componentPhaseDirection")
-    global parameter_names = read(file, "editing/params")
-
-    for ii in 1:length(parameter_names)
-        parameter_names[ii] = parameter_names[ii][1]
-    end
     close(file)
-
     print("File loaded \n circuit parameters:")
-    for param in parameter_names
+    for param in keys(CPD)
         print(string(param) * "\n")
     end
 end
 
+#Generates loop inductance matrix
+function build_L_matrix()
+    L = []
+    ### Algorithm for finding L
+    for j in 1:numLoops                                         #Iterate through all loops
+        current_row = []
+        for i in 1:numLoops                                     #Second iteration through all loops
+            Lij = 0                                           #Float storing the value of the (j,i) position in matrix L
+            #SELF COUPLING
+            for n in loops[i]                                   #Iterate through components in loop i
+                if ((n[1] == 'J') || (n[1] == 'L'))
+                    if (j-1 in get(componentLoopDict, n, -1))   #If component n is also in the loop j
+                        if (n[1] == 'J')
+                            param = eval(Meta.parse(n * ".sys.L"))    #JJ case for setting param
+                        elseif (n[1] == 'L')
+                            eval(Meta.parse("@named " *n* " = build_inductance()"))    
+                            param = eval(Meta.parse(n*".sys.L"))     #Inductor case for setting param
+                        end
+                        if (i == j)
+                            Lij = Lij + param     #Adjust Lij by the value of the inductance of component n
+                        else
+                            Lij = Lij - param     #Adjust Lij by the value of the inductance of component n
+                        end
+                    end
+                end
+            end
+            #MUTUAL COUPLING
+            for n in mutualInd
+                eval(Meta.parse("@named M" * string(n[1])*string(n[2]) * "= build_inductance()"))
+                param = eval(Meta.parse("M" * string(n[1])*string(n[2]) * ".sys.L"))
+                if ((i != j) && (i-1 in n[1]) && (j-1 in n[1])) #If the two currently observed loops are not the same loop and are stated as having mutual inductance
+                    Lij = Lij - param              #Adjust Lij by the value of the mutual inductance
+                end
+            end
+            push!(current_row, Lij)                      #Lij is pushed to current_row 
+        end 
+        L = [L; current_row']                                   #current_row is pushed to the L matrix
+    end
+
+    return transpose(L)
+end
+
 #Build the circuit based on the open file
-function build(Φext, ps_string)
+function build_circuit()
 
     eqs = Equation[]                                        #Array to store equations
 
-    built_loops = []                                       #Array to store loops that have been built using MTK
-    for param in parameter_names                            #Declaring all named parameters as MTK parameters
-        eval(Meta.parse("@parameters " * string(param)))                
-    end
+    built_loops = []
+                                           #Array to store loops that have been built using MTK
 
-    ps = eval(Meta.parse(ps_string))
 
     for i in 1:numLoops                                     #Iterate through all loops
         println("loop $(i)")                              #Display loop name
@@ -96,12 +128,11 @@ function build(Φext, ps_string)
             end
         end
         if (current_loop)                                   #Build a current source loop
-            param = CPD[c_source]
-            new_l = "@named loop$(i) = build_current_source_loop(I = $(param[1]), ω = $(param[2]))"
+            new_l = "@named loop$(i) = build_current_source_loop()"
             new_l = Meta.parse(new_l)
             new_l = eval(new_l)
         else                                                #Build a normal loop (no current source)
-            new_l = "@named loop$(i) = build_loop(Φₑ = $(Φext*k[i]))"
+            new_l = "@named loop$(i) = build_loop()"
             new_l = Meta.parse(new_l)                       #Using metaprogramming to generate loops with unique names and parameters
             new_l = eval(new_l)
         end
@@ -113,30 +144,31 @@ function build(Φext, ps_string)
         println(j)                                          #Display junction name
         if (j[1] == 'R')                                    #Built resistor case
             param = get(CPD, j, 0)
-            new_c = "@named $j = build_resistor(R = $param)"
+            new_c = "@named $j = build_resistor()"
             new_c = Meta.parse(new_c)                       #Using metaprogramming to generate components with unique names and parameters
             new_c = eval(new_c)
             built_components[j] = new_c                     #Push component to built components dictionary
         elseif (j[1] == 'C')                                #Built capacitor case
             param = get(CPD, j, 0)
-            new_c = "@named $j = build_capacitor(C = $param)"
+            new_c = "@named $j = build_capacitor()"
             new_c = Meta.parse(new_c)
             new_c = eval(new_c)
             built_components[j] = new_c
         elseif (j[1] == 'V')                                #Built voltage source case
             param = get(CPD, j, 0)
-            new_c = "@named $j = build_voltage_source(V = $(param[1]), ω = $(param[2]))"
+            new_c = "@named $j = build_voltage_source()"
             new_c = Meta.parse(new_c)
             new_c = eval(new_c)
             built_components[j] = new_c
         elseif (j[1] == 'J')                                #Built Josephson Junction case
             params = get(CPD, j, 0)
-            new_c = "@named $j = build_JJ(I0 = $(params[1]), R = $(params[2]), C = $(params[3]))"
+            new_c = "@named $j = build_JJ()"
             new_c = Meta.parse(new_c)
             new_c = eval(new_c)
             built_components[j] = new_c
-        end
+        end   
     end
+    L = build_L_matrix()                                    #Generate inductance matrix
 
     old_sys = []                                            #Array to store system states                                          
     u0 = Pair{Num, Float64}[]                               #Array to store system initial condionts  (Set to 0)
@@ -157,15 +189,14 @@ function build(Φext, ps_string)
     sys = Vector{ODESystem}(old_sys)                        #Convert system states array to an ODESystem vector form
 
     #Functions from model_builder.jl to form appropriate equations
-    for i in 1:numLoops
-        add_loop!(eqs, built_loops[i], σA[i,:], built_components)
-    end
+    
+    add_loops!(eqs, built_loops, σA, built_components, L)
     current_flow(eqs, componentPhaseDirection, built_loops, built_components)
-    inductance(eqs, L, built_loops)
+    
     
     
 
-    @named _model  =  ODESystem(eqs, t, [], parameter_names)                     #Create an ODESystem with the existing equations
+    @named _model  =  ODESystem(eqs, t)                     #Create an ODESystem with the existing equations
 
     @named model = compose(_model, sys)                     #Compose the existing ODESystem with the system states vector
     println()
@@ -173,14 +204,17 @@ function build(Φext, ps_string)
     println()
     display(states(model))                                  #Display model states
     println()
-    new_model = structural_simplify(model)                  #structural_simplify Algorithm to improve performance
-    return sys, eqs, parameter_names                                #Return structuraly simplified model and initial conditions
+    display(parameters(model))
+    println()
+    new_model = structural_simplify(model);                 #structural_simplify Algorithm to improve performance
+    return new_model, u0                               #Return structuraly simplified model and initial conditions
 end
 
 #Solve initial conditions
-function solve_init(old_u0, t_end)
+function solve_init(model, old_u0, p_string, t_end)
+    ps = eval(Meta.parse(p_string))
     tspan_ini = (0.0, t_end)                                #Create a timespan
-    prob = ODEProblem(new_model, old_u0, tspan_ini, save_everystep = false, progress=true)  #Create an ODEProblem to solve for a specified time only saving the final component variable values
+    prob = ODEProblem(model, old_u0, tspan_ini, ps, save_everystep = false, progress=true)  #Create an ODEProblem to solve for a specified time only saving the final component variable values
     sol = solve(prob, ROS3P())                                       #Solve the ODEProblem
     new_u0 = sol[:,end]                                     #Set the new initial conditions to the 
     return new_u0                                           #return the new intial conditions
