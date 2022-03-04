@@ -207,11 +207,11 @@ function build_circuit()
     display(parameters(model))
     println()
     new_model = structural_simplify(model);                 #structural_simplify Algorithm to improve performance
-    return new_model, u0                               #Return structuraly simplified model and initial conditions
+    return new_model, u0, built_components                               #Return structuraly simplified model and initial conditions
 end
 
 #Solve initial conditions
-function solve_init(model, old_u0, p_string, t_end)
+function solve_init(model, old_u0, t_end, p_string)
     ps = eval(Meta.parse(p_string))
     tspan_ini = (0.0, t_end)                                #Create a timespan
     prob = ODEProblem(model, old_u0, tspan_ini, ps, save_everystep = false, progress=true)  #Create an ODEProblem to solve for a specified time only saving the final component variable values
@@ -225,11 +225,11 @@ function sim_solve(model, u0, t_init, t_end, ps_string)
     ps = eval(Meta.parse(ps_string))
     tspan = (t_init, t_end) #Create a timespan
     if (t_init != 0.0)
-        u0 = solve_init(u0, tspan[1])                           #Find the initial conditions for the start time
+        u0 = solve_init(model,u0, tspan[1], ps_string)                           #Find the initial conditions for the start time
     end
     tsaves = LinRange(tspan[1],tspan[2], 50000)                 #Create tsaves
     prob = ODEProblem(model, u0, tspan, ps, saveat=tsaves, progress=true)   #Create an ODEProblem to solve for a specified time
-    sol = solve(prob, ROS3P(), maxiters=1e9, abstol = 1e-6)
+    sol = solve(prob, maxiters=1e9, abstol = 1e-6)
     return sol                                                  #Return the solved ODEProblem
 end
 
