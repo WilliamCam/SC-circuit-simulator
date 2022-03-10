@@ -65,58 +65,12 @@ function open_file(name)
     end
 end
 
-#Generates loop inductance matrix
-function build_L_matrix()
-    L = zeros(Num, numLoops,numLoops)
-    ### Algorithm for finding L
-    for j in 1:numLoops                                         #Iterate through all loops
-        current_row = []
-        for i in 1:numLoops                                     #Second iteration through all loops
-            Lij = 0                                           #Float storing the value of the (j,i) position in matrix L
-            #SELF COUPLING
-            for n in loops[i]                                   #Iterate through components in loop i
-                if ((n[1] == 'J') || (n[1] == 'L'))
-                    if (j-1 in get(componentLoopDict, n, -1))   #If component n is also in the loop j
-                        if (n[1] == 'J')
-                            param = eval(Meta.parse(n * ".sys.L"))    #JJ case for setting param
-                        elseif (n[1] == 'L')
-                            eval(Meta.parse("@named " *n* " = build_inductance()"))    
-                            param = eval(Meta.parse(n*".sys.L"))     #Inductor case for setting param
-                        end
-                        if (i == j)
-                            Lij = Lij + param     #Adjust Lij by the value of the inductance of component n
-                        else
-                            Lij = Lij - param     #Adjust Lij by the value of the inductance of component n
-                        end
-                    end
-                end
-            end
-            #MUTUAL COUPLING
-            for n in mutualInd
-                eval(Meta.parse("@named M" * string(n[1])*string(n[2]) * "= build_inductance()"))
-                param = eval(Meta.parse("M" * string(n[1])*string(n[2]) * ".sys.L"))
-                if ((i != j) && (i-1 in n[1]) && (j-1 in n[1])) #If the two currently observed loops are not the same loop and are stated as having mutual inductance
-                    Lij = Lij - param              #Adjust Lij by the value of the mutual inductance
-                end
-            end
-            push!(current_row, Lij)                      #Lij is pushed to current_row 
-        end 
-        #L = [L; current_row']
-        L[j,:] = current_row'                                #current_row is pushed to the L matrix
-    end
-
-    return L
-end
-
 #Build the circuit based on the open file
 function build_circuit()
 
     eqs = Equation[]                                        #Array to store equations
-
     built_loops = []
-                                           #Array to store loops that have been built using MTK
-
-
+                                                         #Array to store loops that have been built using MTK
     for i in 1:numLoops                                     #Iterate through all loops
         println("loop $(i)")                              #Display loop name
         current_loop = false
@@ -168,16 +122,55 @@ function build_circuit()
             built_components[j] = new_c
         end   
     end
-    L = build_L_matrix()                                    #Generate inductance matrix
-
+    ### Algorithm for finding L
+    L = zeros(Num, numLoops, numLoops)
+    for j in 1:numLoops                                         #Iterate through all loops
+        current_row = []
+        for i in 1:numLoops                                     #Second iteration through all loops
+            Lij = 0                                           #Float storing the value of the (j,i) position in matrix L
+            #SELF COUPLING
+            for n in loops[i]                                   #Iterate through components in loop i
+                if ((n[1] == 'J') || (n[1] == 'L'))
+                    if (j-1 in get(componentLoopDict, n, -1))   #If component n is also in the loop j
+                        if (n[1] == 'J')
+                            param = eval(Meta.parse(n * ".sys.L"))    #JJ case for setting param
+                        elseif (n[1] == 'L')
+                            eval(Meta.parse("@named " *n* " = build_inductance()"))
+                            #built_components[n] = eval(Meta.parse(n))    
+                            param = eval(Meta.parse(n*".sys.L"))     #Inductor case for setting param
+                        end
+                        if (i == j)
+                            Lij = Lij + param     #Adjust Lij by the value of the inductance of component n
+                        else
+                            Lij = Lij - param     #Adjust Lij by the value of the inductance of component n
+                        end
+                    end
+                end
+            end
+            #MUTUAL COUPLING
+            for n in mutualInd
+                eval(Meta.parse("@named M" * string(n[1])*string(n[2]) * "= build_inductance()"))
+                built_components["M" *string(n[1])*string(n[2])] = eval(Meta.parse("M" * string(n[1])*string(n[2]))) 
+                param = eval(Meta.parse("M" * string(n[1])*string(n[2]) * ".sys.L"))
+                if ((i != j) && (i-1 in n[1]) && (j-1 in n[1])) #If the two currently observed loops are not the same loop and are stated as having mutual inductance
+                    Lij = Lij - param              #Adjust Lij by the value of the mutual inductance
+                end
+            end
+            push!(current_row, Lij)                      #Lij is pushed to current_row 
+        end 
+        L[j,:] = current_row'                                #current_row is pushed to the L matrix
+    end
+                                 
     old_sys = []                                            #Array to store system states                                          
     u0 = Pair{Num, Float64}[]                               #Array to store system initial condionts  (Set to 0)
 
+    θcomponents = Dict()                                        #Array to store components with phase differnece θ
     for comp in built_components                            #Iterate through components to find component system states and intial conditons
         push!(old_sys, comp[2].sys)
-        if (comp[1][1] != 'V')
+        if  comp[1][1] != 'L' 
             push!(u0, comp[2].sys.θ=>0.0)                   #θ initialised to 0
             push!(u0, comp[2].sys.i=>0.0)                   #i initialised to 0
+            θcomponents[comp[1]] = comp[2]
             if (uppercase(comp[1][1]) in ['C', 'J', 'V'])   
                 push!(u0, D(comp[2].sys.θ)=>0.0)            #D(θ) initialised to 0 for capacitors, JJs and voltage sources
             end
@@ -190,8 +183,8 @@ function build_circuit()
 
     #Functions from model_builder.jl to form appropriate equations
     
-    add_loops!(eqs, built_loops, σA, built_components, L)
-    current_flow(eqs, componentPhaseDirection, built_loops, built_components)
+    add_loops!(eqs, built_loops, σA, θcomponents, L)
+    current_flow(eqs, componentPhaseDirection, built_loops, θcomponents)
     
     
     
@@ -207,7 +200,7 @@ function build_circuit()
     display(parameters(model))
     println()
     new_model = structural_simplify(model);                 #structural_simplify Algorithm to improve performance
-    return new_model, u0, built_components                               #Return structuraly simplified model and initial conditions
+    return new_model, u0                                   #Return structuraly simplified model and initial conditions
 end
 
 #Solve initial conditions
