@@ -1,4 +1,4 @@
-using JLD2, FileIO, ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra, Statistics, Dates
+using JLD2, FileIO, ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra, Statistics, Dates, Symbolics
 include("model_builder.jl")
 include("create_netlist.jl")
 
@@ -49,65 +49,30 @@ function open_file(name)
         file = jldopen("$f_name.jld2", "r")
     end
     #file = jldopen("$f_name.jld2", "r")
-    numLoops = read(file, "editing/numLoops")
-    #componentLoopDict = read(file, "editing/componentLoopDict")
-    CPD = read(file, "editing/componentParamDict")
-    #mutualInd = read(file, "editing/mutualInd")
-    junctions = read(file, "editing/junctions")
-    loops = read(file, "editing/loops")
-    k = read(file, "matrices/k")
-    L = read(file, "matrices/L")
-    σA = read(file, "matrices/σA")
+    global numLoops = read(file, "editing/numLoops")
+    global componentLoopDict = read(file, "editing/componentLoopDict")
+    global CPD = read(file, "editing/componentParamDict")
+    global mutualInd = read(file, "editing/mutualInd")
+    global junctions = read(file, "editing/junctions")
+    global loops = read(file, "editing/loops")
+    global σA = read(file, "matrices/σA")
     #σB = read(file, "matrices/σB")
-    componentPhaseDirection = read(file, "matrices/componentPhaseDirection")
+    global componentPhaseDirection = read(file, "matrices/componentPhaseDirection")
     close(file)
-    return numLoops, CPD, junctions, loops, k, L, σA, componentPhaseDirection
-end
-
-#Ask user to input numerical values for variables that are still in symbolic form
-function symbolic_assign()  #Does not work for AC voltage/current sources
-    symbolDict = Dict()
-    for comp in CPD
-        if (comp[1][1] == 'J')
-            for i in 1:4
-                if isa(comp[2][i], Symbol)
-                    symbolDict[comp[2][i]] = push!(get(symbolDict, comp[2][i], []), (comp[1], i))
-                end
-            end
-        else
-            if isa(comp[2], Symbol)
-                symbolDict[comp[2]] = push!(get(symbolDict, comp[2], []), comp[1])
-            end
-        end
+    print("File loaded \n circuit parameters:")
+    for param in keys(CPD)
+        print(string(param) * "\n")
     end
-    for sym in symbolDict
-        println("Symbol: \n$(sym[1])\nComponents")
-        display(sym[2])
-        println("Please enter a value for $(sym[1])")
-        input = readline()
-        for i in sym[2]
-            if isa(i, Tuple)
-                CPD[i[1]][i[2]] = parse(Float64, input)
-            else
-                CPD[i] = parse(Float64, input)
-            end
-        end
-    end
-end
-
-#Edit parameters while in program
-function net_edit(name)
-    edit_netlist(name)
 end
 
 #Build the circuit based on the open file
-function build(Φext)
+function build_circuit()
+
     eqs = Equation[]                                        #Array to store equations
-
-    built_loops = []                                        #Array to store loops that have been built using MTK
-
+    built_loops = []
+                                                         #Array to store loops that have been built using MTK
     for i in 1:numLoops                                     #Iterate through all loops
-        println("loop $(i-1)")                              #Display loop name
+        println("loop $(i)")                              #Display loop name
         current_loop = false
         c_source = ""
         for comp in loops[i]                                #Determine if a loop is a curernt source loop
@@ -117,16 +82,11 @@ function build(Φext)
             end
         end
         if (current_loop)                                   #Build a current source loop
-            param = CPD[c_source]
-            if (length(param) == 1)                         #DC current source case
-                new_l = "@named loop$(i-1) = build_current_source_loop(I = $(param))"
-            else                                            #AC current source case
-                new_l = "@named loop$(i-1) = build_current_source_loop(I = $(param[1]), ω = $(param[2]))"
-            end
+            new_l = "@named loop$(i) = build_current_source_loop()"
             new_l = Meta.parse(new_l)
             new_l = eval(new_l)
         else                                                #Build a normal loop (no current source)
-            new_l = "@named loop$(i-1) = build_loop(Φₑ = $(Φext*k[i]))"
+            new_l = "@named loop$(i) = build_loop()"
             new_l = Meta.parse(new_l)                       #Using metaprogramming to generate loops with unique names and parameters
             new_l = eval(new_l)
         end
@@ -138,43 +98,79 @@ function build(Φext)
         println(j)                                          #Display junction name
         if (j[1] == 'R')                                    #Built resistor case
             param = get(CPD, j, 0)
-            new_c = "@named $j = build_resistor(R = $param)"
+            new_c = "@named $j = build_resistor()"
             new_c = Meta.parse(new_c)                       #Using metaprogramming to generate components with unique names and parameters
             new_c = eval(new_c)
             built_components[j] = new_c                     #Push component to built components dictionary
         elseif (j[1] == 'C')                                #Built capacitor case
             param = get(CPD, j, 0)
-            new_c = "@named $j = build_capacitor(C = $param)"
+            new_c = "@named $j = build_capacitor()"
             new_c = Meta.parse(new_c)
             new_c = eval(new_c)
             built_components[j] = new_c
         elseif (j[1] == 'V')                                #Built voltage source case
             param = get(CPD, j, 0)
-            if (length(param) == 1)                         #DC voltage case
-                new_c = "@named $j = build_voltage_source(V = $param)"
-            else                                            #AC voltage case
-                new_c = "@named $j = build_voltage_source(V = $(param[1]), ω = $(param[2]))"
-            end
+            new_c = "@named $j = build_voltage_source()"
             new_c = Meta.parse(new_c)
             new_c = eval(new_c)
             built_components[j] = new_c
         elseif (j[1] == 'J')                                #Built Josephson Junction case
             params = get(CPD, j, 0)
-            new_c = "@named $j = build_JJ(I0 = $(params[1]), R = $(params[2]), C = $(params[3]))"
+            new_c = "@named $j = build_JJ()"
             new_c = Meta.parse(new_c)
             new_c = eval(new_c)
             built_components[j] = new_c
-        end
+        end   
     end
-
+    ### Algorithm for finding L
+    L = zeros(Num, numLoops, numLoops)
+    for j in 1:numLoops                                         #Iterate through all loops
+        current_row = []
+        for i in 1:numLoops                                     #Second iteration through all loops
+            Lij = 0                                           #Float storing the value of the (j,i) position in matrix L
+            #SELF COUPLING
+            for n in loops[i]                                   #Iterate through components in loop i
+                if ((n[1] == 'J') || (n[1] == 'L'))
+                    if (j-1 in get(componentLoopDict, n, -1))   #If component n is also in the loop j
+                        if (n[1] == 'J')
+                            param = eval(Meta.parse(n * ".sys.L"))    #JJ case for setting param
+                        elseif (n[1] == 'L')
+                            eval(Meta.parse("@named " *n* " = build_inductance()"))
+                            #built_components[n] = eval(Meta.parse(n))    
+                            param = eval(Meta.parse(n*".sys.L"))     #Inductor case for setting param
+                        end
+                        if (i == j)
+                            Lij = Lij + param     #Adjust Lij by the value of the inductance of component n
+                        else
+                            Lij = Lij - param     #Adjust Lij by the value of the inductance of component n
+                        end
+                    end
+                end
+            end
+            #MUTUAL COUPLING
+            for n in mutualInd
+                eval(Meta.parse("@named M" * string(n[1])*string(n[2]) * "= build_inductance()"))
+                built_components["M" *string(n[1])*string(n[2])] = eval(Meta.parse("M" * string(n[1])*string(n[2]))) 
+                param = eval(Meta.parse("M" * string(n[1])*string(n[2]) * ".sys.L"))
+                if ((i != j) && (i-1 in n[1]) && (j-1 in n[1])) #If the two currently observed loops are not the same loop and are stated as having mutual inductance
+                    Lij = Lij - param              #Adjust Lij by the value of the mutual inductance
+                end
+            end
+            push!(current_row, Lij)                      #Lij is pushed to current_row 
+        end 
+        L[j,:] = current_row'                                #current_row is pushed to the L matrix
+    end
+                                 
     old_sys = []                                            #Array to store system states                                          
     u0 = Pair{Num, Float64}[]                               #Array to store system initial condionts  (Set to 0)
 
+    θcomponents = Dict()                                        #Array to store components with phase differnece θ
     for comp in built_components                            #Iterate through components to find component system states and intial conditons
         push!(old_sys, comp[2].sys)
-        if (comp[1][1] != 'V')
+        if  comp[1][1] != 'L' 
             push!(u0, comp[2].sys.θ=>0.0)                   #θ initialised to 0
             push!(u0, comp[2].sys.i=>0.0)                   #i initialised to 0
+            θcomponents[comp[1]] = comp[2]
             if (uppercase(comp[1][1]) in ['C', 'J', 'V'])   
                 push!(u0, D(comp[2].sys.θ)=>0.0)            #D(θ) initialised to 0 for capacitors, JJs and voltage sources
             end
@@ -186,47 +182,47 @@ function build(Φext)
     sys = Vector{ODESystem}(old_sys)                        #Convert system states array to an ODESystem vector form
 
     #Functions from model_builder.jl to form appropriate equations
-    inductance(eqs, L, built_loops)
-    current_flow(eqs, componentPhaseDirection, built_loops, built_components)
-    for i in 1:numLoops
-        add_loop!(eqs, built_loops[i], σA[i,:], built_components)
-    end
+    
+    add_loops!(eqs, built_loops, σA, θcomponents, L)
+    current_flow(eqs, componentPhaseDirection, built_loops, θcomponents)
+    
+    
+    
 
     @named _model  =  ODESystem(eqs, t)                     #Create an ODESystem with the existing equations
 
     @named model = compose(_model, sys)                     #Compose the existing ODESystem with the system states vector
-
     println()
     display(equations(model))                               #Display model equations
     println()
     display(states(model))                                  #Display model states
     println()
-    new_model = structural_simplify(model)                  #structural_simplify Algorithm to improve performance
-    return new_model, u0                                    #Return structuraly simplified model and initial conditions
+    display(parameters(model))
+    println()
+    new_model = structural_simplify(model);                 #structural_simplify Algorithm to improve performance
+    return new_model, u0                                   #Return structuraly simplified model and initial conditions
 end
 
 #Solve initial conditions
-function solve_init(old_u0, t_end)
+function solve_init(model, old_u0, t_end, p_string)
+    ps = eval(Meta.parse(p_string))
     tspan_ini = (0.0, t_end)                                #Create a timespan
-    prob = ODEProblem(new_model, old_u0, tspan_ini, save_everystep = false, progress=true)  #Create an ODEProblem to solve for a specified time only saving the final component variable values
+    prob = ODEProblem(model, old_u0, tspan_ini, ps, save_everystep = false, progress=true)  #Create an ODEProblem to solve for a specified time only saving the final component variable values
     sol = solve(prob, ROS3P())                                       #Solve the ODEProblem
     new_u0 = sol[:,end]                                     #Set the new initial conditions to the 
     return new_u0                                           #return the new intial conditions
 end
 
 #Give a timespan for the simulation and solve
-function sim_solve(u0, t_init, t_end, solver="none")
-    tspan = (parse(Float64, t_init), parse(Float64, t_end)) #Create a timespan
+function sim_solve(model, u0, t_init, t_end, ps_string)
+    ps = eval(Meta.parse(ps_string))
+    tspan = (t_init, t_end) #Create a timespan
     if (t_init != 0.0)
-        u0 = solve_init(u0, tspan[1])                           #Find the initial conditions for the start time
+        u0 = solve_init(model,u0, tspan[1], ps_string)                           #Find the initial conditions for the start time
     end
     tsaves = LinRange(tspan[1],tspan[2], 50000)                 #Create tsaves
-    prob = ODEProblem(new_model, u0, tspan, saveat=tsaves, progress=true)   #Create an ODEProblem to solve for a specified time
-    if (solver == "none")                                       #No solver specified
-        sol = solve(prob)                                       #Solve the ODEProblem
-    else
-        sol = solve(prob, solver)                               #Use specified solver to solve ODEProblem
-    end
+    prob = ODEProblem(model, u0, tspan, ps, saveat=tsaves, progress=true)   #Create an ODEProblem to solve for a specified time
+    sol = solve(prob, maxiters=1e9, abstol = 1e-6)
     return sol                                                  #Return the solved ODEProblem
 end
 
@@ -293,49 +289,20 @@ end=#
 
 ###  Commands running from Julia REPL
 help()
-net_edit("circuits/ishaan")             #readline() in RELP has some issue where the first line is not read
-numLoops, CPD, junctions, loops, k, L, σA, componentPhaseDirection = open_file("circuits/ishaan")
-symbolic_assign()                       #readline() in RELP has some issue where the first line is not read
-new_model, u0 = build(3Φ₀);
-u0 = solve_init(u0, 1e-7)
-sol = sim_solve(u0, "0", "1e-7", ROS3P())
+#net_edit("circuits/ishaan")             #readline() in RELP has some issue where the first line is not read
+# numLoops, CPD, junctions, loops, k, L, σA, componentPhaseDirection = open_file("circuits/ishaan")
+# symbolic_assign()                       #readline() in RELP has some issue where the first line is not read
+# new_model, u0 = build(3Φ₀);
+# u0 = solve_init(u0, 1e-7)
+# sol = sim_solve(u0, "0", "1e-7", ROS3P())
 
-single_plot("C3","V")
-single_plot("J4","V")
+# single_plot("C3","V")
+# single_plot("J4","V")
 
-ts = sol[t];  
-vs1 = Φ₀/2pi*sol[D(C3.sys.θ)];
-vs2 =  Φ₀/2pi*sol[D(J4.sys.θ)];
-plot(ts, vs1, label="C3.V");
-plot!(ts, vs2, label="J4.V");
-xlabel!("Time");
-ylabel!("Voltage")
-#=## Run from terminal commands
-println(" --- Enter 'help' if you need help --- ")
-println(" --- Enter '~' to exit program  --- ")
-while true
-    input = readline()
-    if (input == "~")
-        exit()
-    elseif startswith(lowercase(input), "help")         #Give instructions on how to use
-        help()
-    elseif startswith(lowercase(input), "open_file")
-        open_file(input[11:end-1])  
-    elseif startswith(lowercase(input), "build")        #Pass through data from open_file()?
-        build(input[7:end-1])
-    elseif startswith(lowercase(input), "solve_init")   #Pass through model form build()?
-        si = split(strip(input[12:end-1]),',')
-        solve_init(strip(si[1]), strip(si[2]))
-    elseif startswith(lowercase(input), "sim_solve")        #Pass through model form build()?
-        ts = split(strip(input[11]:end-1]),',')   
-        sim_solve(strip(ts[1]), strip(ts[2]), strip(ts[3]))
-    elseif startswith(lowercase(input), "single_plot")  #Pass through solution form sim_solve()?
-        s_plot = split(input[13:end-1], ',')
-        single_plot(strip(s_plot[1]), strip(s_plot[2]))
-    elseif startswith(lowercase(input), "edit_param")   #Pass through CPD?
-        edit_param()
-    elseif startswith(lowercase(input), "symbolic_assign")  #Pass through CPD?
-        symbolic_assign()
-    end
-end
-# =#
+# ts = sol[t];  
+# vs1 = Φ₀/2pi*sol[D(C3.sys.θ)];
+# vs2 =  Φ₀/2pi*sol[D(J4.sys.θ)];
+# plot(ts, vs1, label="C3.V");
+# plot!(ts, vs2, label="J4.V");
+# xlabel!("Time");
+# ylabel!("Voltage")
