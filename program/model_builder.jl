@@ -18,11 +18,11 @@ struct Inductor
     sys::ODESystem
 end
 
-function build_inductance(;name, L = 1.0)
-    ps = @parameters L = L
+function build_inductance(;name, L = 1.0, k = 0.0)
+    ps = @parameters L = L k=k
     sys = ODESystem(Equation[], t, [], ps; name = name)
     Inductor(sys)
-end 
+end
 
 function build_resistor(;name, R = 1.0, k = 0.0) #Builds ODESystem for resistor using Component structure
     @named component = build_component()    #Create new component
@@ -36,7 +36,7 @@ function build_resistor(;name, R = 1.0, k = 0.0) #Builds ODESystem for resistor 
 end
 
 
-function build__capacitor(;name, C = 1.0, k = 0.0) #builds ODESystem for capacitor using Component
+function build_capacitor(;name, C = 1.0, k = 0.0) #builds ODESystem for capacitor using Component
     @named component = build_component()
     @unpack θ, i = component
     ps = @parameters C=C k=k
@@ -96,10 +96,11 @@ function build_current_source_loop(;name, I = 1.0, ω = 0.0, Φₑ = 0.0) #Build
     CurrentSourceLoop(sys)
 end
 
-function add_loops!(eqs::Vector{Equation}, loops, σ, cs, L)
+#modifing equation to add nonlinear inductance specified by K 
+function add_loops!(eqs::Vector{Equation}, loops, σ, cs, L, K)
     for i in 1:length(loops)
         if occursin("CurrentSourceLoop", string(loops[i])) == false                    #Check that loop is not a current source loop
-            push!(eqs,0 ~ loops[i].sys.Φₑ - dot([Φ₀/(2*pi)*c.sys.θ for (n, c) in cs], σ[i,:])-  dot(L[:,i], [l.sys.iₘ for l in loops])) #Find Φₗ = L . iₘ  for each loop        
+            push!(eqs,0 ~ loops[i].sys.Φₑ - dot([Φ₀/(2*pi)*c.sys.θ for (n, c) in cs], σ[i,:])-  dot(L[:,i] .* (1 .+ K[:, i] .* loops[i].sys.iₘ .^2 .* L[:,i].^2), [l.sys.iₘ for l in loops])) #Find Φₗ = L . iₘ  for each loop        
         end
     end
 end

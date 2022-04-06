@@ -7,6 +7,8 @@ function help()
     println()
     println("Use 'help()' to display this")
     println()
+    println("Use 'new_netlist(name)' to create a new netlist named 'name.jld2' ")
+    println()
     println("Use 'open_file(name)' to open an existing .jdl2 file to extract circuit data")
     println()
     println("Use 'symbolic_assign()' to input numerical values for variables that are still in symbolic form")
@@ -124,10 +126,13 @@ function build_circuit()
     end
     ### Algorithm for finding L
     L = zeros(Num, numLoops, numLoops)
+    K = zeros(Num, numLoops, numLoops)
     for j in 1:numLoops                                         #Iterate through all loops
         current_row = []
+        current_row_K=[]
         for i in 1:numLoops                                     #Second iteration through all loops
             Lij = 0                                           #Float storing the value of the (j,i) position in matrix L
+            Kij = 0
             #SELF COUPLING
             for n in loops[i]                                   #Iterate through components in loop i
                 if ((n[1] == 'J') || (n[1] == 'L'))
@@ -138,6 +143,7 @@ function build_circuit()
                             eval(Meta.parse("@named " *n* " = build_inductance()"))
                             #built_components[n] = eval(Meta.parse(n))    
                             param = eval(Meta.parse(n*".sys.L"))     #Inductor case for setting param
+                            Kij  = eval(Meta.parse(n*".sys.k")) #nonlinearity of inductor (doesn't work for multiple inductors in one branch)
                         end
                         if (i == j)
                             Lij = Lij + param     #Adjust Lij by the value of the inductance of component n
@@ -148,6 +154,7 @@ function build_circuit()
                 end
             end
             #MUTUAL COUPLING
+            #need to include functionality for nonlinear inductances, currently mutual inductance is purely linear
             for n in mutualInd
                 eval(Meta.parse("@named M" * string(n[1])*string(n[2]) * "= build_inductance()"))
                 built_components["M" *string(n[1])*string(n[2])] = eval(Meta.parse("M" * string(n[1])*string(n[2]))) 
@@ -157,8 +164,10 @@ function build_circuit()
                 end
             end
             push!(current_row, Lij)                      #Lij is pushed to current_row 
+            push!(current_row_K, Kij)
         end 
         L[j,:] = current_row'                                #current_row is pushed to the L matrix
+        K[j,:] = current_row_K' 
     end
                                  
     old_sys = []                                            #Array to store system states                                          
@@ -183,7 +192,7 @@ function build_circuit()
 
     #Functions from model_builder.jl to form appropriate equations
     
-    add_loops!(eqs, built_loops, σA, θcomponents, L)
+    add_loops!(eqs, built_loops, σA, θcomponents, L, K)
     current_flow(eqs, componentPhaseDirection, built_loops, θcomponents)
     
     
@@ -200,7 +209,7 @@ function build_circuit()
     display(parameters(model))
     println()
     new_model = structural_simplify(model);                 #structural_simplify Algorithm to improve performance
-    return new_model, u0                                   #Return structuraly simplified model and initial conditions
+    return new_model, u0, model                                   #Return structuraly simplified model and initial conditions
 end
 
 #Solve initial conditions
