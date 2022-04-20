@@ -1,5 +1,5 @@
 using ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra
-const Φ₀ = 2.067833848e-15              #Flux quantum
+const Φ₀ = 1.0             #Flux quantum
 
 @variables t                            #Time variable
 D = Differential(t)                     #First Differential operation
