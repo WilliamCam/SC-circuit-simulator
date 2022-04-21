@@ -200,109 +200,40 @@ function build_circuit()
     display(parameters(model))
     println()
     new_model = structural_simplify(model);                 #structural_simplify Algorithm to improve performance
-    return new_model, u0                                   #Return structuraly simplified model and initial conditions
+    return new_model, u0                                 #Return structuraly simplified model and initial conditions
+end
+
+function parameter_set(ps, param::Num, value::Float64)
+    return push!(ps, param => value)
 end
 
 #Solve initial conditions
-function solve_init(model, old_u0, t_end, p_string)
-    ps = eval(Meta.parse(p_string))
+function solve_ini(model, old_u0, t_end, ps)
     tspan_ini = (0.0, t_end)                                #Create a timespan
-    prob = ODEProblem(model, old_u0, tspan_ini, ps, save_everystep = false, progress=true)  #Create an ODEProblem to solve for a specified time only saving the final component variable values
-    sol = solve(prob, ROS3P())                                       #Solve the ODEProblem
+    prob = ODEProblem(model, old_u0, tspan_ini, ps, save_everystep = false)  #Create an ODEProblem to solve for a specified time only saving the final component variable values
+    sol = solve(prob, Rodas5())                                       #Solve the ODEProblem
     new_u0 = sol[:,end]                                     #Set the new initial conditions to the 
     return new_u0                                           #return the new intial conditions
 end
 
 #Give a timespan for the simulation and solve
-function sim_solve(model, u0, t_init, t_end, ps_string)
-    ps = eval(Meta.parse(ps_string))
-    tspan = (t_init, t_end) #Create a timespan
-    if (t_init != 0.0)
-        u0 = solve_init(model,u0, tspan[1], ps_string)                           #Find the initial conditions for the start time
-    end
-    tsaves = LinRange(tspan[1],tspan[2], 50000)                 #Create tsaves
-    prob = ODEProblem(model, u0, tspan, ps, saveat=tsaves, progress=true)   #Create an ODEProblem to solve for a specified time
-    sol = solve(prob, maxiters=1e9, abstol = 1e-6)
+function tsolve(model, u0, tspan, param_pairs; NPts = 1000, alg = Rodas5(), kwargs...)
+    tsaves = LinRange(tspan[1],tspan[2], NPts)                 #Create tsaves
+    prob = ODEProblem(model, u0, tspan, param_pairs, saveat=tsaves; kwargs...)   #Create an ODEProblem to solve for a specified time
+    sol = solve(prob, alg)
     return sol                                                  #Return the solved ODEProblem
 end
 
-#Plot a single component
-function single_plot(comp, param)
-    try
-        if (param == "i")                                   #Current on y axis
-            str = "$comp.sys.i"                             #Using metaprogramming
-            ex = Meta.parse(str)
-            p = plot(sol, vars=[eval(ex)], label="$comp.$param", ylims=:round)  #Plot the component curernt vs time
-            xlabel!("Time")                                 #Add axis labels
-            ylabel!("Current")
-            display(p)                                      #Display plot (if suppourted)
-            png("$(now())")                                 #Save plot as the current date and time
-        elseif (param == "V")                               #Voltage on y axis
-            str = "D($comp.sys.θ)"                          #Using metaprogramming
-            ex = Meta.parse(str)
-            vs = Φ₀/2pi*sol[eval(ex)]                       #Multiply by constant (conversion from θ to V)
-            ts = sol[t]                                     #Timespan
-            #p = plot(ts[20000:end], vs[20000:end], label="$comp.$param", ylims=:round)                #Plot the component voltage vs time
-            p = plot(ts, vs, label="$comp.$param", ylims=:round)                #Plot the component voltage vs time
-            xlabel!("Time")                                 #Add axis labels
-            ylabel!("Voltage")
-            display(p)                                      #Display plot (if suppourted)
-            png("$(now())")                                 #Save plot as the current date and time
-        end
-    catch e
-        if isa(e, UndefVarError)                            #If the component cannot be found print a suitable error message
-            println(" --- Component does not exist ---")
-        elseif isa(e, ArgumentError)                        #If attempt to plot voltage through a component where D(θ) is not saved
-            dtime = sol.t[2]-sol.t[1]                       #Find change in time
-            str = "$comp.sys.θ"                             #Using metaprogramming
-            ex = Meta.parse(str)
-            dv = sol[eval(ex)]
-            res = []                                        #Result vector
-            for i in 1:length(dv)-1                         #Differentiation by hand
-                d = Φ₀/2pi*(dv[i+1] - dv[i])/dtime          #Change in θ over change in time multiplied by constant (conversion from θ to V)
-                push!(res, d)                               #Push dθ/dt to result vector
-            end
-            p = plot(sol.t[1:end-1], res, label="$comp.$param", ylims=:round)   #Plot the component voltage vs time
-            xlabel!("Time")                                 #Add axis labels
-            ylabel!("Current")
-            display(p)                                      #Display plot (if suppourted)
-            png("$(now())")                                 #Save plot as the current date and time
-        end
+#Plot a current or voltage of a component (resistor or capacitor)
+function tplot(sol::ODESolution, c::Component; units = "Volts")
+    if units == "Amps"
+        y = sol[c.sys.i][2:end]
+        ylabel = "Current (A)"
+        label = string(c.sys.i)
+    else
+        y = 1/(sol.t[2]-sol.t[1]) * Φ₀/(2.0*pi) * diff(sol[c.sys.θ])
+        ylabel = "Voltage  (V)"
+        label = replace(string(c.sys.θ), "θ" => "v")
     end
+    plot(sol.t[2:end], y, xlabel = "Time (s)", ylabel = ylabel, label = label)
 end
-
-
-#=Ensemble functions, not complete
-function prob_func(prob,i,repeat) #problem funtion modifies input parameters
-    flux_vec = LinRange(0.0,10,10)
-    new_p = prob.p[1:numLoops]*flux_vec[i]
-    remake(prob,p=[new_p; prob.p[(numLoops+1):end]])
-end
-function output_func(sol, i)
-    (mean(Φ₀/(2.0*pi)*1.0e+6*sol),false)
-end# output_func
-function ensemble()
-    ensemble_prob = EnsembleProblem(prob, prob_func=prob_func, output_func = output_func) #ensemble
-    sim = solve(ensemble_prob,Tsit5(),EnsembleDistributed(),trajectories=100)
-    plot(sim)
-end=#
-
-###  Commands running from Julia REPL
-help()
-#net_edit("circuits/ishaan")             #readline() in RELP has some issue where the first line is not read
-# numLoops, CPD, junctions, loops, k, L, σA, componentPhaseDirection = open_file("circuits/ishaan")
-# symbolic_assign()                       #readline() in RELP has some issue where the first line is not read
-# new_model, u0 = build(3Φ₀);
-# u0 = solve_init(u0, 1e-7)
-# sol = sim_solve(u0, "0", "1e-7", ROS3P())
-
-# single_plot("C3","V")
-# single_plot("J4","V")
-
-# ts = sol[t];  
-# vs1 = Φ₀/2pi*sol[D(C3.sys.θ)];
-# vs2 =  Φ₀/2pi*sol[D(J4.sys.θ)];
-# plot(ts, vs1, label="C3.V");
-# plot!(ts, vs2, label="J4.V");
-# xlabel!("Time");
-# ylabel!("Voltage")
