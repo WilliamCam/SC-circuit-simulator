@@ -208,7 +208,7 @@ function build_circuit()
     println()
     display(parameters(model))
     println()
-    new_model = structural_simplify(model);                 #structural_simplify Algorithm to improve performance
+    new_model = structural_simplify(dae_index_lowering(model));                 #structural_simplify Algorithm to improve performance
     return new_model, u0, model                                   #Return structuraly simplified model and initial conditions
 end
 

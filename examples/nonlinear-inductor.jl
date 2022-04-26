@@ -124,41 +124,54 @@ ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=output_fun
 using HarmonicBalance, ModelingToolkit
 eqs = equations(model)
 sts = states(model)
+@variables t, C1k, C1C, C1i(t), C1θ(t), R1R, R1k, R1θ(t), R1i(t), R2R, R2k, R2θ(t), R2i(t), V1θ(t), V1V, ω,
+loop2Φₑ, L1L, L1k, loop2i(t), loop3Φₑ
+
+new_eqs = [
+    d(C1θ, t, 2) ~ (2*pi*(1 + C1k * (C1i^2))*C1i) / C1C
+    d(R1θ,t) ~ 2*pi*R1R*(1 + R1k*(R1i^2))*R1i
+    d(R2θ,t) ~ 2*pi*R2R*(1 + R2k*(R2i^2))*R2i
+    d(V1θ,t) ~ -2*pi*V1V*cos(ω*t)
+    0 ~ loop2Φₑ + 0.15915494309189535*C1θ + L1L*(1 + L1k*(L1L^2)*(loop2i^2))*R1i - L1L*(1 + L1k*(L1L^2)*(loop2i^2))*loop2i
+    0 ~ loop3Φₑ + L1L*(1 + L1k*(L1L^2)*(R1i^2))*loop2i - 0.15915494309189535*R1θ - L1L*(1 + L1k*(L1L^2)*(R1i^2))*R1i
+    0 ~ V1V*cos(ω*t) - 0.15915494309189535*d(C1θ, t) - R2R*(1 + R2k*(R2i^2))*R2i
+
+]
+
+
 
 #eqs = substitute(eqs, Dict(ps))
 
-eqs1 = [scsim.D2(scsim.C1.sys.θ) ~ (6.283185307179586*scsim.C1.sys.i) / 2.0678338480000003e-18]
-eqs1 = substitute(eqs1, Dict(scsim.C1.sys.i => scsim.Rin.sys.i - scsim.loop2.sys.iₘ))
-append!(eqs1,eqs[3:end])
-eqs1 = substitute(eqs1, Dict(sts[1]=>scsim.D(scsim.C1.sys.θ)))
+# eqs1 = [scsim.D2(scsim.C1.sys.θ) ~ (6.283185307179586*(1 + scsim.C1.sys.k * (scsim.C1.sys.i^2))*scsim.C1.sys.i) / scsim.C1.sys.C]
+# eqs1 = substitute(eqs1, Dict(scsim.C1.sys.i => scsim.Rin.sys.i - scsim.loop2.sys.iₘ))
+# append!(eqs1,eqs[3:end])
+# eqs1 = substitute(eqs1, Dict(sts[1]=>scsim.D(scsim.C1.sys.θ)))
 
-diff_eq = DifferentialEquation(eqs1, [scsim.C1.sys.θ, scsim.R1.sys.θ, scsim.Rin.sys.θ, 
-scsim.V1.sys.θ, scsim.R1.sys.i, scsim.Rin.sys.i, scsim.loop2.sys.iₘ])
+ diff_eq = DifferentialEquation(new_eqs, [C1θ, R1θ, R1i, R2θ, R2i, V1θ, loop2i])
 
-add_harmonic!(diff_eq, scsim.C1.sys.θ, scsim.V1.sys.ω)
-add_harmonic!(diff_eq, scsim.R1.sys.θ, scsim.V1.sys.ω)
-add_harmonic!(diff_eq, scsim.Rin.sys.θ, scsim.V1.sys.ω)
-add_harmonic!(diff_eq, scsim.V1.sys.θ, scsim.V1.sys.ω)
-add_harmonic!(diff_eq, scsim.R1.sys.i, scsim.V1.sys.ω)
-add_harmonic!(diff_eq, scsim.Rin.sys.i, scsim.V1.sys.ω)
-add_harmonic!(diff_eq, scsim.loop2.sys.iₘ, scsim.V1.sys.ω)
+ add_harmonic!(diff_eq, C1θ, ω)
+ add_harmonic!(diff_eq, R1θ,ω)
+ add_harmonic!(diff_eq, R2θ,ω)
+ add_harmonic!(diff_eq, V1θ, ω)
+ add_harmonic!(diff_eq, R1i,ω)
+ add_harmonic!(diff_eq, R2i, ω)
+ add_harmonic!(diff_eq, loop2i, ω)
 
-harmonic_eq = get_harmonic_equations(diff_eq)
+ harmonic_eq = get_harmonic_equations(diff_eq)
 
-varied = scsim.V1.sys.ω => LinRange(0.9e+3, 1.2e+3, 100)
+ varied = ω => LinRange(0.9e+3, 1.2e+3, 100)
 fixed = (
-    scsim.C1.sys.C => 1.0e-3,
-    scsim.L1.sys.L => 1.0e-3,
-    scsim.V1.sys.V => 2e+3,
-    scsim.L1.sys.k => 1.0,
-    scsim.C1.sys.k=>1.0,
-    scsim.R1.sys.R=>10.0,
-    scsim.Rin.sys.R=>1.0,
-    scsim.Rin.sys.k=>1.0,
-    scsim.R1.sys.k=>1.0,
-    scsim.loop1.sys.Φₑ=>1.0,
-    scsim.loop2.sys.Φₑ=>1.0,
-    scsim.loop3.sys.Φₑ=>1.0
+    C1C => 1.0e-3,
+    L1L => 1.0e-3,
+    V1V => 2e+3,
+    L1k => 0.0,
+    C1k=>0.0,
+    R1R=>10.0,
+    R2R=>1.0,
+    R2k=>0.0,
+    R1k=>0.0,
+    loop2Φₑ=>0.0,
+    loop3Φₑ=>0.0
 )
 
 solutions = get_steady_states(harmonic_eq, varied, fixed)
