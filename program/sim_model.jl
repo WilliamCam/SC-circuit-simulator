@@ -199,7 +199,8 @@ function build_circuit()
     println()
     display(parameters(model))
     println()
-    new_model = structural_simplify(model);                 #structural_simplify Algorithm to improve performance
+    test = dae_index_lowering(model)
+    new_model = structural_simplify(test);                 #structural_simplify Algorithm to improve performance
     return new_model, u0                                 #Return structuraly simplified model and initial conditions
 end
 
@@ -208,25 +209,27 @@ function parameter_set(ps, param::Num, value::Float64)
 end
 
 #Solve initial conditions
-function solve_ini(model, old_u0, t_end, ps)
+function solve_ini(model, old_u0, t_end, ps; alg = Rodas5(), kwargs...)
     tspan_ini = (0.0, t_end)                                #Create a timespan
-    prob = ODEProblem(model, old_u0, tspan_ini, ps, save_everystep = false)  #Create an ODEProblem to solve for a specified time only saving the final component variable values
-    sol = solve(prob, Rodas5())                                       #Solve the ODEProblem
+    prob = ODEProblem(model, old_u0, tspan_ini, ps, save_everystep = false; kwargs...)  #Create an ODEProblem to solve for a specified time only saving the final component variable values
+    sol = solve(prob, alg)                                       #Solve the ODEProblem
     new_u0 = sol[:,end]                                     #Set the new initial conditions to the 
     return new_u0                                           #return the new intial conditions
 end
 
+
+
+
 #Give a timespan for the simulation and solve
-function tsolve(model, u0, tspan, param_pairs; NPts = 1000, alg = Rodas5(), kwargs...)
-    tsaves = LinRange(tspan[1],tspan[2], NPts)                 #Create tsaves
-    prob = ODEProblem(model, u0, tspan, param_pairs, saveat=tsaves; kwargs...)   #Create an ODEProblem to solve for a specified time
+function tsolve(model, u0, tspan, param_pairs; alg = Rodas5(), kwargs...)      
+    prob = ODEProblem(model, u0, tspan, param_pairs; kwargs...)   #Create an ODEProblem to solve for a specified time
     sol = solve(prob, alg)
     return sol                                                  #Return the solved ODEProblem
 end
 
 #Plot a current or voltage of a component (resistor or capacitor)
-function tplot(sol::ODESolution, c::Component; units = "Volts")
-    if units == "Amps"
+function tplot(sol::ODESolution, c::Component; units = "volts")
+    if units == "amps"
         y = sol[c.sys.i][2:end]
         ylabel = "Current (A)"
         label = string(c.sys.i)
@@ -237,3 +240,53 @@ function tplot(sol::ODESolution, c::Component; units = "Volts")
     end
     plot(sol.t[2:end], y, xlabel = "Time (s)", ylabel = ylabel, label = label)
 end
+
+#solve for the frequency response of some load component when subject to an AC source, by performing an ensemble of transient simulations
+function ensemble_fsolve(
+        model::ODESystem, u0, tspan, fspan, param_pairs, source,  load::Component; 
+        NPts = 1000, Ntraj = 100, alg = Rodas5(), units = "volts", kwargs...
+    )
+    tsaves = LinRange(tspan[1],tspan[2], NPts)
+    ω_vec = 2*pi .* LinRange(fspan[1], fspan[2], Ntraj) 
+    prob = ODEProblem(model, u0, tspan, param_pairs, saveat = tsaves; kwargs...)
+
+    function RMS(x)
+        return sqrt(mean((x .- mean(x)).^2))
+    end
+
+    function RMS_volts(sol,i)
+        push!(logger, 1)
+        println(string(Ntraj-length(logger)))
+        (RMS(1/(sol.t[2]-sol.t[1])*Φ₀/(2*pi)*diff(sol[load.sys.θ])),false)
+    end
+
+    function RMS_amps(sol,i)
+        push!(logger, 1)
+        println(string(Ntraj-length(logger)))
+        (RMS(sol[load.sys.i]),false)
+    end
+    if units == "volts"
+        output_func = RMS_volts
+    elseif units == "amps"
+        output_func = RMS_amps
+    end
+
+    ω_index = findfirst(isequal(source.sys.ω), parameters(model))
+    function prob_func(prob, i ,repeat)
+        prob.p[ω_index] = ω_vec[i]
+        prob
+    end
+
+    logger = []
+    ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=output_func)
+    sol = solve(ensemble_prob,alg, EnsembleSerial(), trajectories=Ntraj)
+    return sol
+end
+
+
+
+
+
+
+    
+

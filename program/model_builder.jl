@@ -63,7 +63,7 @@ function build_voltage_source(;name, V = 1.0, ω = 0.0) #Builds ODESystem for Vo
     @unpack θ, i = component                #Extract variables from component
     ps = @parameters V=V ω=ω
     eqs = [
-            D(θ)~ - V*cos(ω*t)*2*pi/Φ₀      #Differential equation defining θ, ω and V relationship
+            D(θ) ~ V*cos(ω*t)*2*pi/Φ₀      #Differential equation defining θ, ω and V relationship
           ]
     sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
     Component(sys)
