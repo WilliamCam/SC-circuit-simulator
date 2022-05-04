@@ -99,3 +99,33 @@ x = [solutions[i][1][scsim.loop1.sys.ω] for i in range(1,100)]
 y = [sqrt(solutions[i][1][HarmonicBalance.u1]^2 + solutions[i][1][HarmonicBalance.v1]^2) for i in range(1,100)]
 
 plot(real(x),abs.(y))
+
+
+##############################Testing HarmonicBalance.jl to see if it can handle algebraic expressions
+
+diff_eq = DifferentialEquation(
+    [d(scsim.C1.sys.θ, scsim.t, 2)*(2.067833848e-15*scsim.C1.sys.C)  ~ 6.283185307179586*scsim.C1.sys.i,
+    (scsim.L1.sys.L*(scsim.loop1.sys.I*cos(scsim.loop1.sys.ω*scsim.t) + (-3.2910597840193497e-16*d(scsim.C1.sys.θ, scsim.t)) / scsim.R1.sys.R) - 3.2910597840193497e-16*scsim.C1.sys.θ) / scsim.L1.sys.L],
+    [scsim.C1.sys.θ, scsim.C1.sys.i]  
+)
+
+# diff_eq = DifferentialEquation(
+#     d(scsim.C1.sys.θ, scsim.t, 2) + scsim.C1.sys.θ + scsim.L1.sys.L*d(scsim.C1.sys.θ,scsim.t) ~ scsim.loop1.sys.I*cos(scsim.loop1.sys.ω*scsim.t),
+#     scsim.C1.sys.θ  
+#)
+add_harmonic!(diff_eq, scsim.C1.sys.θ, scsim.loop1.sys.ω) 
+harmonic_eq = get_harmonic_equations(diff_eq)
+
+varied = scsim.loop1.sys.ω => LinRange(900.0, 1100.0, 100) # range of parameter values
+
+fixed = (scsim.L1.sys.L => 1.0e-3, scsim.loop1.sys.I => 1.0e-6, scsim.R1.sys.R => 50.0, scsim.C1.sys.C=>1.0e-3)
+
+solutions = get_steady_states(harmonic_eq, varied, fixed)
+
+plt = plot_1D_solutions(solutions, x="loop1₊ω", y="sqrt(u1^2 + v1^2)");
+
+x = [solutions[i][1][scsim.loop1.sys.ω] for i in range(1,100)]
+
+y = [sqrt(solutions[i][1][HarmonicBalance.u1]^2 + solutions[i][1][HarmonicBalance.v1]^2) for i in range(1,100)]
+
+plot(real(x),abs.(y))
