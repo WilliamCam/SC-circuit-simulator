@@ -1,50 +1,54 @@
 using DifferentialEquations, Plots, Statistics
 
 include("C://Users//21958742//GitHub//SC-circuit-simulator//program//SCsim.jl")
-scsim.open_file("C://Users//21958742//GitHub//SC-circuit-simulator//examples//Quantum Gravity//QuartzTnetwork.jld2")
+scsim.open_file("C://Users//21958742//GitHub//SC-circuit-simulator//examples//Quantum Gravity//QuartzTnetwork-cs.jld2")
 
 model, u0, old_model = scsim.build_circuit()
 
 ps = [
-    scsim.V1.sys.V => 1.0
-    scsim.V1.sys.ω => 5.36e+7
+    scsim.loop1.sys.I => 1e-2
+    scsim.loop1.sys.ω => 5.360562674188974e7-1000
     scsim.R1.sys.R=> 50.0
     scsim.C1.sys.C => 10.0e-12
     scsim.Cq.sys.C => 8.7e-17
     scsim.Lq.sys.L => 4.0
     scsim.Lq.sys.k => 1.0
-    scsim.Rq.sys.R => 500.0
+    scsim.Rq.sys.R => 50.0
     scsim.C0.sys.C=> 6.9e-11
     scsim.C2.sys.C => 10.0e-12
-    scsim.R2.sys.R=>1.0e+3
+    scsim.R2.sys.R=>50.0
 ]
 
-tspan = (0.0, 1.0e-3)
+tspan = (0.0, 3.0e-2)
 tsaves = LinRange(tspan[2]/10.0, tspan[2], 10000)
 dt = tsaves[2] - tsaves[1]
-
-prob = ODEProblem(model, u0, tspan, ps, maxiters=1e9, force_dtmin=true, saveat=tsaves, abstol=1e-8)
-@time sol = solve(prob, ROS3P())
-v =  1/dt * scsim.Φ₀/(2*pi)*diff(sol[scsim.R2.sys.θ])
-i = sol[scsim.Rq.sys.i][2:end]
+using ModelingToolkit
+model = dae_index_lowering(model)
+prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9)
+#prob = ODEProblem(model, u0, tspan, ps, saveat=tsaves, maxiters=1e9)
+@time sol = solve(prob, Tsit5(), abstol = 1e-8)
+v =  1/dt * scsim.Φ₀/(2*pi)*diff(sol[scsim.Rq.sys.i])
+i = sol[scsim.R2.sys.i][2:end]
 plot(i)
 fs = 2/dt
 using FFTW
 v_fft = abs.(2*rfft(v)/length(v))
 fn = LinRange(0.0, fs/2, length(v_fft))
-#plot(fn, v_fft)
+plot(fn, v_fft)
 maximum(v_fft)
 function RMS(x)
     return sqrt(mean((x .- mean(x)).^2))
 end
 RMS(v)
 
-ωλ = 1/sqrt(prob.p[12]*prob.p[2])
 
+Cindex = findfirst(isequal(scsim.Cq.sys.C),parameters(model))
+Lindex = findfirst(isequal(scsim.Lq.sys.L),parameters(model))
+ωλ = 1/ sqrt(prob.p[9]*prob.p[2])
 Ntrajectories = 1000
 
 function prob_func(prob, i ,repeat)
-    prob.p[7] = ω_vec[i]
+    prob.p[21] = ω_vec[i]
     prob
 end
 
@@ -61,22 +65,112 @@ function RMS_IRq(sol,i)
 end
 
 ##Ensemble sims##
-ω_vec = ωλ .+ LinRange(-5000,5000, Ntrajectories)
-ps[1] = scsim.V1.sys.V => 1.0 
+ω_vec = ωλ .+ LinRange(-5e+3,5e+3, Ntrajectories)
 
-prob = ODEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false,
-    abstol = 1e-8    
-)
+ps[1] = scsim.loop1.sys.I => 1.0e-3 
+
 logger = []
+prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false, abstol = 1e-8)
 ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
-@time sim_0p9V = solve(ensemble_prob,Rodas5(),EnsembleThreads(),trajectories=Ntrajectories)
+@time sim_1mA = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Ntrajectories)
 
-plot(ω_vec/(2*pi), sim_0p9V[2,:])
 
-ps[1] = scsim.V1.sys.V => 1.2 
 
-prob = ODEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, progress=true, progress_steps = 1, force_dtmin=true, dense = false)
+ps[1] = scsim.loop1.sys.I => 1.5e-3 
+
+logger = []
+prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false, abstol = 1e-8)
 ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
-@time sim_1p2V = solve(ensemble_prob,Rodas5(),EnsembleSerial(),trajectories=Ntrajectories)
+@time sim_1p5mA = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Ntrajectories)
 
-plot(ω_vec/(2*pi), sim_1p2V[2,:])
+ps[1] = scsim.loop1.sys.I => 2.0e-3 
+
+logger = []
+prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false, abstol = 1e-8)
+ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
+@time sim_2mA = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Ntrajectories)
+
+ps[1] = scsim.loop1.sys.I => 3.0e-3 
+
+logger = []
+prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false, abstol = 1e-8)
+ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
+@time sim_3mA = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Ntrajectories)
+
+ps[1] = scsim.loop1.sys.I => 4.0e-3 
+
+logger = []
+prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false, abstol = 1e-8)
+ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
+@time sim_4mA = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Ntrajectories)
+
+ plt1 = plot(ω_vec/(2*pi), [sim_1mA[1,:], sim_1p5mA[1,:]/1.5,sim_2mA[1,:]/2.0, sim_3mA[1,:]/3.0],
+    xlabel = "Frequency (Hz)",
+    ylabel = "Motional current (Irms)",
+    label = ["Iin = 1mA" "Iin = 1.5mA" "Iin = 2mA" "Iin = 3mA"],
+    title = "Nonlinear motional inductor k =1"
+
+)
+
+plt2 = plot(ω_vec/(2*pi), 50 .* [sim_1mA[2,:], sim_1p5mA[2,:]/1.5,sim_2mA[2,:]/2.0, sim_3mA[2,:]/3.0],
+xlabel = "Frequency (Hz)",
+ylabel = "Output Voltage (Vrms)",
+label = ["Iin = 1mA" "Iin = 1.5mA" "Iin = 2mA" "Iin = 3mA"],
+title = "Nonlinear motional inductor k =1"
+
+)
+
+savefig(plt1, "C://Users//21958742//GitHub//SC-circuit-simulator//examples//Quantum Gravity//TnetworkSim-motionalI-k1.0.pdf")
+savefig(plt2, "C://Users//21958742//GitHub//SC-circuit-simulator//examples//Quantum Gravity//TnetworkSim-Vout-k1.0.pdf")
+## Harmonic Balance ##
+using Symbolics
+using HarmonicBalance
+
+eqs = equations(model)
+obs = observed(model)
+
+eqs1 = substitute(eqs, Dict(scsim.C2.sys.k => 0.0, scsim.C1.sys.k => 0.0, scsim.C0.sys.k=>0.0,
+    scsim.Cq.sys.k=>0.0, scsim.R1.sys.k=>0.0, scsim.R2.sys.k=>0.0, scsim.Rq.sys.k=>0.0))
+
+sub2 = Symbolics.solve_for(obs[8], scsim.Cq.sys.i)
+eqs2 = substitute(eqs1, Dict(scsim.Cq.sys.i => sub2))
+
+sub3 = Symbolics.solve_for(obs[7], scsim.Rq.sys.i)
+eqs3 = substitute(eqs2, Dict(scsim.Rq.sys.i => sub3))
+
+sub4 = Symbolics.solve_for(obs[3], scsim.C0.sys.i)
+eqs4 = substitute(eqs3, Dict(scsim.C0.sys.i => sub4))
+
+sub5 = Symbolics.solve_for(obs[4], scsim.R1.sys.i)
+eqs5 = substitute(eqs4, Dict(scsim.R1.sys.i => sub5))
+
+##eliminate equation 13 by substitution
+sub6 = Symbolics.solve_for(eqs5[13], scsim.R2.sys.i)
+eqs6 = substitute(eqs5[1:12], Dict(scsim.R2.sys.i => sub6))
+
+
+##eliminate equation 5 by subtitution
+sub7 = -d(scsim.Cq.sys.θ, scsim.t, 2) * 2.067833848e-15*scsim.Cq.sys.C / 6.283185307179586 + (scsim.loop1.sys.I*cos(scsim.loop1.sys.ω*scsim.t))
+eqs7 = substitute([eqs6[1:4]; eqs6[6:end]], Dict(scsim.loop2.sys.iₘ => sub7))
+
+diff_eqs = [
+        d(scsim.C1.sys.θ, scsim.t, 2) ~ eqs7[1].rhs
+        d(scsim.C2.sys.θ, scsim.t, 2) ~ (6.283185307179586*((3.2910597840193497e-16*d(scsim.C2.sys.θ,scsim.t) - 3.2910597840193497e-16*d(scsim.C0.sys.θ,scsim.t)) / (-scsim.R2.sys.R))) / (2.067833848e-15*scsim.C2.sys.C)
+        eqs7[6]
+        d(scsim.C0.sys.θ, scsim.t, 2) ~ (6.283185307179586*(scsim.loop1.sys.I*cos(scsim.loop1.sys.ω*scsim.t) + (3.2910597840193497e-16*d(scsim.C0.sys.θ, scsim.t) - 3.2910597840193497e-16*d(scsim.C2.sys.θ, scsim.t)) / (-scsim.R2.sys.R) - 3.29105978401935e-16*scsim.Cq.sys.C*d(scsim.Cq.sys.θ,scsim.t,2))) / (2.067833848e-15*scsim.C0.sys.C)
+        d(scsim.R2.sys.θ,scsim.t) ~ 3.0385348964360245e15*scsim.R2.sys.R*((3.2910597840193497e-16*d(scsim.C2.sys.θ,scsim.t) - 3.2910597840193497e-16*d(scsim.C0.sys.θ,scsim.t)) / (-scsim.R2.sys.R))
+        eqs7[10]
+        eqs7[11]
+]
+
+sts = [scsim.C1.sys.θ, scsim.C2.sys.θ, scsim.R1.sys.θ, scsim.C0.sys.θ, scsim.R2.sys.θ, scsim.Rq.sys.θ, scsim.Cq.sys.θ]
+
+diff_eq = DifferentialEquation(diff_eqs, sts)
+
+for state in sts
+    add_harmonic!(diff_eq, state, scsim.loop1.sys.ω)
+end
+
+diff_eq
+
+harmonic_eq = get_harmonic_equations(diff_eq)
