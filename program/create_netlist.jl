@@ -118,7 +118,7 @@ function new_netlist(name)
     println("WARNING CURRENT SOURCES MUST BE ON THE OUTSIDE OF AN EXTERNAL LOOP")
     for i in 1:numLoops                         #Asks about circuit elements
         push!(loops, [])
-        println("Enter all components in Loop $(i-1) one by one\n(Enter '~' when all components are listed)")
+        println("Enter all components in Loop $(i) one by one\n(Enter '~' when all components are listed)")
         while true
             input = readline()
             if (input == "~")  

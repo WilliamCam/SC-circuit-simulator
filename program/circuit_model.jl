@@ -1,5 +1,5 @@
 using JLD2, FileIO, ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra, Statistics, Dates, Symbolics
-include("model_builder.jl")
+include("component_library.jl")
 include("create_netlist.jl")
 
 #Display function uses
@@ -63,6 +63,7 @@ function open_file(name)
     for param in keys(CPD)
         print(string(param) * "\n")
     end
+
 end
 
 #Build the circuit based on the open file
@@ -152,7 +153,7 @@ function build_circuit()
                 eval(Meta.parse("@named M" * string(n[1])*string(n[2]) * "= build_inductance()"))
                 built_components["M" *string(n[1])*string(n[2])] = eval(Meta.parse("M" * string(n[1])*string(n[2]))) 
                 param = eval(Meta.parse("M" * string(n[1])*string(n[2]) * ".sys.L"))
-                if ((i != j) && (i-1 in n[1]) && (j-1 in n[1])) #If the two currently observed loops are not the same loop and are stated as having mutual inductance
+                if ((i != j) && (i in n) && (j in n)) #If the two currently observed loops are not the same loop and are stated as having mutual inductance
                     Lij = Lij - param              #Adjust Lij by the value of the mutual inductance
                 end
             end
@@ -167,7 +168,7 @@ function build_circuit()
     θcomponents = Dict()                                        #Array to store components with phase differnece θ
     for comp in built_components                            #Iterate through components to find component system states and intial conditons
         push!(old_sys, comp[2].sys)
-        if  comp[1][1] != 'L' 
+        if  !(comp[1][1] in ['L', 'M'])
             push!(u0, comp[2].sys.θ=>0.0)                   #θ initialised to 0
             push!(u0, comp[2].sys.i=>0.0)                   #i initialised to 0
             θcomponents[comp[1]] = comp[2]
@@ -203,90 +204,3 @@ function build_circuit()
     new_model = structural_simplify(test);                 #structural_simplify Algorithm to improve performance
     return new_model, u0                                 #Return structuraly simplified model and initial conditions
 end
-
-function parameter_set(ps, param::Num, value::Float64)
-    return push!(ps, param => value)
-end
-
-#Solve initial conditions
-function solve_ini(model, old_u0, t_end, ps; alg = Rodas5(), kwargs...)
-    tspan_ini = (0.0, t_end)                                #Create a timespan
-    prob = ODEProblem(model, old_u0, tspan_ini, ps, save_everystep = false; kwargs...)  #Create an ODEProblem to solve for a specified time only saving the final component variable values
-    sol = solve(prob, alg)                                       #Solve the ODEProblem
-    new_u0 = sol[:,end]                                     #Set the new initial conditions to the 
-    return new_u0                                           #return the new intial conditions
-end
-
-
-
-
-#Give a timespan for the simulation and solve
-function tsolve(model, u0, tspan, param_pairs; alg = Rodas5(), kwargs...)      
-    prob = ODEProblem(model, u0, tspan, param_pairs; kwargs...)   #Create an ODEProblem to solve for a specified time
-    sol = solve(prob, alg)
-    return sol                                                  #Return the solved ODEProblem
-end
-
-#Plot a current or voltage of a component (resistor or capacitor)
-function tplot(sol::ODESolution, c::Component; units = "volts")
-    if units == "amps"
-        y = sol[c.sys.i][2:end]
-        ylabel = "Current (A)"
-        label = string(c.sys.i)
-    else
-        y = 1/(sol.t[2]-sol.t[1]) * Φ₀/(2.0*pi) * diff(sol[c.sys.θ])
-        ylabel = "Voltage  (V)"
-        label = replace(string(c.sys.θ), "θ" => "v")
-    end
-    plot(sol.t[2:end], y, xlabel = "Time (s)", ylabel = ylabel, label = label)
-end
-
-#solve for the frequency response of some load component when subject to an AC source, by performing an ensemble of transient simulations
-function ensemble_fsolve(
-        model::ODESystem, u0, tspan, fspan, param_pairs, source,  load::Component; 
-        NPts = 1000, Ntraj = 100, alg = Rodas5(), units = "volts", kwargs...
-    )
-    tsaves = LinRange(tspan[1],tspan[2], NPts)
-    ω_vec = 2*pi .* LinRange(fspan[1], fspan[2], Ntraj) 
-    prob = ODEProblem(model, u0, tspan, param_pairs, saveat = tsaves; kwargs...)
-
-    function RMS(x)
-        return sqrt(mean((x .- mean(x)).^2))
-    end
-
-    function RMS_volts(sol,i)
-        push!(logger, 1)
-        println(string(Ntraj-length(logger)))
-        (RMS(1/(sol.t[2]-sol.t[1])*Φ₀/(2*pi)*diff(sol[load.sys.θ])),false)
-    end
-
-    function RMS_amps(sol,i)
-        push!(logger, 1)
-        println(string(Ntraj-length(logger)))
-        (RMS(sol[load.sys.i]),false)
-    end
-    if units == "volts"
-        output_func = RMS_volts
-    elseif units == "amps"
-        output_func = RMS_amps
-    end
-
-    ω_index = findfirst(isequal(source.sys.ω), parameters(model))
-    function prob_func(prob, i ,repeat)
-        prob.p[ω_index] = ω_vec[i]
-        prob
-    end
-
-    logger = []
-    ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=output_func)
-    sol = solve(ensemble_prob,alg, EnsembleSerial(), trajectories=Ntraj)
-    return sol
-end
-
-
-
-
-
-
-    
-
