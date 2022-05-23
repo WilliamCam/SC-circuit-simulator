@@ -175,3 +175,5 @@ fixed = (
 )
 
 solutions = get_steady_states(harmonic_eq, varied, fixed)
+
+Pow

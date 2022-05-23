@@ -6,20 +6,20 @@ scsim.open_file("C://Users//21958742//GitHub//SC-circuit-simulator//examples//Qu
 model, u0, old_model = scsim.build_circuit()
 
 ps = [
-    scsim.loop1.sys.I => 1e-2
-    scsim.loop1.sys.ω => 5.360562674188974e7-1000
+    scsim.loop1.sys.I => 1e-4
+    scsim.loop1.sys.ω => 5.360562674188974e7
     scsim.R1.sys.R=> 50.0
     scsim.C1.sys.C => 10.0e-12
     scsim.Cq.sys.C => 8.7e-17
     scsim.Lq.sys.L => 4.0
     scsim.Lq.sys.k => 1.0
-    scsim.Rq.sys.R => 50.0
+    scsim.Rq.sys.R => 500.0
     scsim.C0.sys.C=> 6.9e-11
     scsim.C2.sys.C => 10.0e-12
     scsim.R2.sys.R=>50.0
 ]
 
-tspan = (0.0, 3.0e-2)
+tspan = (0.0, 5.0e-1)
 tsaves = LinRange(tspan[2]/10.0, tspan[2], 10000)
 dt = tsaves[2] - tsaves[1]
 using ModelingToolkit
@@ -28,7 +28,7 @@ prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9)
 #prob = ODEProblem(model, u0, tspan, ps, saveat=tsaves, maxiters=1e9)
 @time sol = solve(prob, Tsit5(), abstol = 1e-8)
 v =  1/dt * scsim.Φ₀/(2*pi)*diff(sol[scsim.Rq.sys.i])
-i = sol[scsim.R2.sys.i][2:end]
+i = sol[scsim.Rq.sys.i][2:end]
 plot(i)
 fs = 2/dt
 using FFTW
@@ -67,6 +67,36 @@ end
 ##Ensemble sims##
 ω_vec = ωλ .+ LinRange(-5e+3,5e+3, Ntrajectories)
 
+ps[1] = scsim.loop1.sys.I => 0.5e-3 
+
+logger = []
+prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false, abstol = 1e-8)
+ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
+@time sim_0p5mA = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Ntrajectories)
+
+ps[1] = scsim.loop1.sys.I => 0.6e-3 
+
+logger = []
+prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false, abstol = 1e-8)
+ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
+@time sim_0p6mA = solve(ensemble_prob,Tsit5(),EnsembleSerial(),trajectories=Ntrajectories)
+
+ps[1] = scsim.loop1.sys.I => 0.7e-3 
+
+logger = []
+prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false, abstol = 1e-8)
+ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
+@time sim_0p7mA = solve(ensemble_prob,Tsit5(),EnsembleSerial(),trajectories=Ntrajectories)
+
+ps[1] = scsim.loop1.sys.I => 0.8e-3 
+
+logger = []
+prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false, abstol = 1e-8)
+ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
+@time sim_0p8mA = solve(ensemble_prob,Tsit5(),EnsembleSerial(),trajectories=Ntrajectories)
+
+plot(ω_vec/(2*pi),sim_0p5mA[2,:])
+
 ps[1] = scsim.loop1.sys.I => 1.0e-3 
 
 logger = []
@@ -74,14 +104,12 @@ prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dt
 ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
 @time sim_1mA = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Ntrajectories)
 
-
-
-ps[1] = scsim.loop1.sys.I => 1.5e-3 
+ps[1] = scsim.loop1.sys.I => 1.25e-3 
 
 logger = []
 prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false, abstol = 1e-8)
 ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
-@time sim_1p5mA = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Ntrajectories)
+@time sim_1p25mA = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Ntrajectories)
 
 ps[1] = scsim.loop1.sys.I => 2.0e-3 
 
@@ -97,14 +125,8 @@ prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dt
 ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
 @time sim_3mA = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Ntrajectories)
 
-ps[1] = scsim.loop1.sys.I => 4.0e-3 
-
-logger = []
-prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false, abstol = 1e-8)
-ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
-@time sim_4mA = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Ntrajectories)
-
- plt1 = plot(ω_vec/(2*pi), [sim_1mA[1,:], sim_1p5mA[1,:]/1.5,sim_2mA[1,:]/2.0, sim_3mA[1,:]/3.0],
+ plt1 = plot(ω_vec/(2*pi), 
+    [sim_0p5mA[1,:], sim_0p6mA[1,:],sim_0p7mA[1,:], sim_0p8mA[1,:], sim_1mA[1,:], sim_1p25mA[1,:], sim_2mA[1,:], sim_3mA[1,:]],
     xlabel = "Frequency (Hz)",
     ylabel = "Motional current (Irms)",
     label = ["Iin = 1mA" "Iin = 1.5mA" "Iin = 2mA" "Iin = 3mA"],
@@ -112,7 +134,9 @@ ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
 
 )
 
-plt2 = plot(ω_vec/(2*pi), 50 .* [sim_1mA[2,:], sim_1p5mA[2,:]/1.5,sim_2mA[2,:]/2.0, sim_3mA[2,:]/3.0],
+plt2 = plot(ω_vec/(2*pi),
+ 50 .* [sim_0p5mA[2,:]/5.0, sim_0p6mA[2,:]/6.0,sim_0p7mA[2,:]/7.0, sim_0p8mA[2,:]/8.0,
+    sim_1mA[2,:]/10.0, sim_1p25mA[2,:]/12.5, sim_2mA[2,:]/20.0, sim_3mA[2,:]/30.0],
 xlabel = "Frequency (Hz)",
 ylabel = "Output Voltage (Vrms)",
 label = ["Iin = 1mA" "Iin = 1.5mA" "Iin = 2mA" "Iin = 3mA"],
@@ -120,8 +144,8 @@ title = "Nonlinear motional inductor k =1"
 
 )
 
-savefig(plt1, "C://Users//21958742//GitHub//SC-circuit-simulator//examples//Quantum Gravity//TnetworkSim-motionalI-k1.0.pdf")
-savefig(plt2, "C://Users//21958742//GitHub//SC-circuit-simulator//examples//Quantum Gravity//TnetworkSim-Vout-k1.0.pdf")
+savefig(plt1, "C://Users//21958742//GitHub//SC-circuit-simulator//examples//Quantum Gravity//TnetworkSim-motionalI-k1.0-0p5mA.pdf")
+savefig(plt2, "C://Users//21958742//GitHub//SC-circuit-simulator//examples//Quantum Gravity//TnetworkSim-Vout-k1.0-0p5mA.pdf")
 ## Harmonic Balance ##
 using Symbolics
 using HarmonicBalance
@@ -174,3 +198,16 @@ end
 diff_eq
 
 harmonic_eq = get_harmonic_equations(diff_eq)
+
+#######################################################################################################################
+
+tspan = (0.0, 5.0e-1)
+tsaves = LinRange(tspan[2]/10.0, tspan[2], 10000)
+ps[1] = scsim.loop1.sys.I => 0.5e-3
+ps[8] = scsim.R1.sys.R => 5.36
+ω_vec = ωλ .+ LinRange(-500,500, Ntrajectories)
+logger = []
+prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false, abstol = 1e-8)
+ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
+@time sim2_0p5mA = solve(ensemble_prob,Tsit5(),EnsembleThreads(),trajectories=Ntrajectories)
+plot(sim2_0p5mA[2,:])
