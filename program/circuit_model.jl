@@ -1,4 +1,4 @@
-using JLD2, FileIO, ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra, Statistics, Dates, Symbolics
+using JLD2, FileIO, ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra, Statistics, Dates, Symbolics, DataStructures
 include("component_library.jl")
 include("create_netlist.jl")
 
@@ -67,7 +67,7 @@ function open_file(name)
 end
 
 #Build the circuit based on the open file
-function build_circuit()
+function build_circuit(; dae_system = false)
 
     eqs = Equation[]                                        #Array to store equations
     built_loops = []
@@ -94,7 +94,7 @@ function build_circuit()
         push!(built_loops, new_l)                           #Push built loop to built_loops array
     end
 
-    built_components = Dict()                               #Dictionary to store components that have been built with MTK
+    built_components = OrderedDict()                               #Dictionary to store components that have been built with MTK
     for j in junctions                                      #Iterate through juncrions
         println(j)                                          #Display junction name
         if (j[1] == 'R')                                    #Built resistor case
@@ -165,7 +165,7 @@ function build_circuit()
     old_sys = []                                            #Array to store system states                                          
     u0 = Pair{Num, Float64}[]                               #Array to store system initial condionts  (Set to 0)
 
-    θcomponents = Dict()                                        #Array to store components with phase differnece θ
+    θcomponents = OrderedDict()                                        #Array to store components with phase differnece θ
     for comp in built_components                            #Iterate through components to find component system states and intial conditons
         push!(old_sys, comp[2].sys)
         if  !(comp[1][1] in ['L', 'M'])
@@ -200,7 +200,12 @@ function build_circuit()
     println()
     display(parameters(model))
     println()
-    test = dae_index_lowering(model)
-    new_model = structural_simplify(test);                 #structural_simplify Algorithm to improve performance
-    return new_model, u0                                 #Return structuraly simplified model and initial conditions
+    if dae_system == true
+        new_model = structural_simplify(dae_index_lowering(model))
+    else
+        new_model = structural_simplify(model)                #structural_simplify Algorithm to improve performance
+    end
+        
+    return new_model, u0
+                                 #Return structuraly simplified model and initial conditions
 end
