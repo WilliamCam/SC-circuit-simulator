@@ -13,18 +13,18 @@ ps = [
     scsim.Cq.sys.C => 8.7e-17
     scsim.Lq.sys.L => 4.0
     scsim.Lq.sys.k => 1.0
-    scsim.Rq.sys.R => 500.0
+    scsim.Rq.sys.R => 5.36
     scsim.C0.sys.C=> 6.9e-11
     scsim.C2.sys.C => 10.0e-12
     scsim.R2.sys.R=>50.0
 ]
 
-tspan = (0.0, 5.0e-1)
+tspan = (0.0, 5.0e-3)
 tsaves = LinRange(tspan[2]/10.0, tspan[2], 10000)
 dt = tsaves[2] - tsaves[1]
 using ModelingToolkit
-model = dae_index_lowering(model)
-prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9)
+dae_model = dae_index_lowering(model)
+prob = ODAEProblem(dae_model, u0, tspan, ps, saveat = tsaves, maxiters=1e9)
 #prob = ODEProblem(model, u0, tspan, ps, saveat=tsaves, maxiters=1e9)
 @time sol = solve(prob, Tsit5(), abstol = 1e-8)
 v =  1/dt * scsim.Φ₀/(2*pi)*diff(sol[scsim.Rq.sys.i])
@@ -200,12 +200,12 @@ diff_eq
 harmonic_eq = get_harmonic_equations(diff_eq)
 
 #######################################################################################################################
-
-tspan = (0.0, 5.0e-1)
-tsaves = LinRange(tspan[2]/10.0, tspan[2], 10000)
-ps[1] = scsim.loop1.sys.I => 0.5e-3
-ps[8] = scsim.R1.sys.R => 5.36
-ω_vec = ωλ .+ LinRange(-500,500, Ntrajectories)
+Ntrajectories = 100
+tspan = (0.0, 1.0)
+tsaves = LinRange(tspan[1]/10.0, tspan[2], 10000)
+ps[1] = scsim.loop1.sys.I => 1e-3
+ps[8] = scsim.Rq.sys.R => 5.30
+ω_vec = ωλ .+ LinRange(-300,300, Ntrajectories)
 logger = []
 prob = ODAEProblem(model, u0, tspan, ps, saveat = tsaves, maxiters=1e9, force_dtmin=true, dense = false, abstol = 1e-8)
 ensemble_prob = EnsembleProblem(prob,prob_func=prob_func, output_func=RMS_IRq)
