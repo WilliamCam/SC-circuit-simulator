@@ -129,3 +129,4 @@ x = [solutions[i][1][scsim.loop1.sys.ω] for i in range(1,100)]
 y = [sqrt(solutions[i][1][HarmonicBalance.u1]^2 + solutions[i][1][HarmonicBalance.v1]^2) for i in range(1,100)]
 
 plot(real(x),abs.(y))
+
