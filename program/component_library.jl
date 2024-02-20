@@ -1,13 +1,17 @@
 using ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra
-const Φ₀ = 2.067833848e-15              #Flux quantum
-
+  
+@parameters I₀ R₀ β
 @variables t                            #Time variable
 D = Differential(t)                     #First Differential operation
 D2 = Differential(t)^2                  #Second Differential operation
+I₀ = GlobalScope(I₀)
+R₀ = GlobalScope(R₀)
+β = GlobalScope(β)
+const Φ₀ = 2.067833848e-15
 
 function build_component(;name)         #General component with phase and current states
     sts = @variables θ(t)=1.0 i(t)=1.0  
-    ODESystem(Equation[], t, sts, []; name=name)
+    ODESystem(Equation[], t, sts, [β, R₀, I₀]; name=name)
 end
 
 struct Component
@@ -29,7 +33,7 @@ function build_resistor(;name, R = 1.0) #Builds ODESystem for resistor using Com
     @unpack θ, i = component 
     ps = @parameters R=R               #Extract variables from component
     eqs = [
-            D(θ)~i*(2*pi*R)/Φ₀              #Differential equation defining θ and R relationship
+            D(θ)~i*R/(I₀*R₀)            #Differential equation defining θ and R relationship
           ]
     sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
     Component(sys)
@@ -41,32 +45,21 @@ function build_capacitor(;name, C = 1.0) #Builds ODESystem for capacitor using C
     ps = @parameters C=C
      
     eqs = [
-            D2(θ)~i*2*pi/(Φ₀*C)             #Differential equation defining θ and C relationship
+            D2(θ)~i/(β*I₀*C)            #Differential equation defining θ and C relationship
           ]
     sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
     Component(ode_order_lowering(sys))
 end
 
-function build_JJ(;name, I0 = 1.0, R = 1.0, C = 1.0, L = 1.0) #Builds ODESystem for Josephson Junction using Component structure
+function build_JJ(;name, L=1) #Builds ODESystem for Josephson Junction using Component structure
     @named component = build_component()    #Create new component
     @unpack θ, i = component                #Extract variables from component
-    ps = @parameters R=R C=C L=L I0=I0
+    ps = @parameters L=L
     eqs = [
-            D2(θ) ~ (i - I0*sin(θ) - D(θ)*Φ₀/(2*pi*R))*(2*pi)/(Φ₀*C)    #Differential equation defining θ I0, R and C relationship
+            D2(θ) ~ (i/I₀ - sin(θ) - D(θ))/β   #Differential equation defining θ I0, R and C relationship
           ]
     sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
     Component(ode_order_lowering(sys))
-end
-
-function build_voltage_source(;name, V = 1.0, ω = 0.0) #Builds ODESystem for Voltage Source (AC or DC) using Component structure
-    @named component = build_component()    #Create new component
-    @unpack θ, i = component                #Extract variables from component
-    ps = @parameters V=V ω=ω
-    eqs = [
-            D(θ) ~ V*cos(ω*t)*2*pi/Φ₀      #Differential equation defining θ, ω and V relationship
-          ]
-    sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
-    Component(sys)
 end
 
 struct Loop
@@ -99,7 +92,7 @@ end
 function add_loops!(eqs::Vector{Equation}, loops, σ, cs, L)
     for i in 1:length(loops)
         if occursin("CurrentSourceLoop", string(loops[i])) == false                    #Check that loop is not a current source loop
-            push!(eqs,0 ~ loops[i].sys.Φₑ - dot([Φ₀/(2*pi)*c.sys.θ for (n, c) in cs], σ[i,:])-  dot(L[:,i], [l.sys.iₘ for l in loops])) #Find Φₗ = L . iₘ  for each loop        
+            push!(eqs,dot([c.sys.θ for (n, c) in cs], σ[i,:]) ~ 2*π*loops[i].sys.Φₑ -  2*π*dot(L[:,i], [l.sys.iₘ for l in loops])) #Find Φₗ = L . iₘ  for each loop        
         end
     end
 end
