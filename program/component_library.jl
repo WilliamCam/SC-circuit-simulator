@@ -33,7 +33,7 @@ function build_resistor(;name, R = 1.0) #Builds ODESystem for resistor using Com
     @unpack θ, i = component 
     ps = @parameters R=R               #Extract variables from component
     eqs = [
-            D(θ)~R*i/(I₀)           #Differential equation defining θ and R relationship
+            D(θ)~i*R/(I₀)            #Differential equation defining θ and R relationship
           ]
     sys = extend(ODESystem(eqs, t, [], ps; name=name), component)
     Component(sys)

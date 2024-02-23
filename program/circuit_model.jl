@@ -67,7 +67,7 @@ function open_file(name)
 end
 
 #Build the circuit based on the open file
-function build_circuit(; dae_system = false)
+function build_circuit(; dae_system = false, og_model = false)
 
     eqs = Equation[]                                        #Array to store equations
     built_loops = []
@@ -205,7 +205,9 @@ function build_circuit(; dae_system = false)
     else
         new_model = structural_simplify(model)                #structural_simplify Algorithm to improve performance
     end
-        
-    return new_model, u0
-                                 #Return structuraly simplified model and initial conditions
+    if og_model == true
+        return new_model, u0, model
+    else
+        return new_model, u0
+    end                         #Return structuraly simplified model and initial conditions
 end
