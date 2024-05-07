@@ -103,7 +103,7 @@ function ensemble_parameter_sweep(
     function RMS_volts(sol,i)
         push!(logger, 1)
         println(string(Ntraj-length(logger)))
-        (RMS(1/(sol.t[2]-sol.t[1])*Φ₀/(2*pi)*diff(sol[load.sys.θ])),false)
+        (RMS(1/(sol.t[2]-sol.t[1])*diff(sol[load.sys.θ])),false)
     end
 
     function RMS_amps(sol,i)

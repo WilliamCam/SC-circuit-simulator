@@ -11,7 +11,7 @@ model, u0 = scsim.build_circuit()
 
 # we set the values of circuit parameters, for any parameters not specified; default values will be assigned.
 
-I₀ = 1.0e-6
+I₀ = 5.0e-7
 R₀ = 5.0
 Φ₀ = scsim.Φ₀
 
@@ -20,22 +20,22 @@ R₀ = 5.0
 βc = 0.01
 βL = 2*pi/Φ₀ * I₀
 βnorm = 2π/Φ₀* I₀ *R₀^2
-(8.0/βL)/Φ₀
+res = 1/sqrt(2.0/βnorm* 100.0/βL)
 ps = [
-    scsim.loop4.sys.ω => (2*pi*100.0e+6/ωc)
+    scsim.loop4.sys.ω => (res/ωc)
     scsim.loop4.sys.I => 1.25*I₀
-    scsim.R1.sys.R => 50.0
-    scsim.C1.sys.C => 2.0/βnorm
-    scsim.L1.sys.L => 2.0/βL/Φ₀
+    scsim.R1.sys.R => 50.0/R₀
+    scsim.C1.sys.C => 2.0/βnorm/βc
+    scsim.L1.sys.L => 1.0/βL/Φ₀
     scsim.L2.sys.L => 100.0/βL/Φ₀
     scsim.M12.sys.L => 8.0/βL/Φ₀
-    scsim.loop1.sys.Φₑ => 0.5
+    scsim.loop1.sys.Φₑ => 0.1
     scsim.β=>βc
     scsim.I₀=>I₀
     scsim.R₀=>R₀
 ]
 
-tspan = (0.0, 2000.0)
+tspan = (0.0, 500.0)
 using DifferentialEquations
 saveat = LinRange(tspan[2]/10.0, tspan[2], 10000)
 prob = ODEProblem(model, u0, tspan, ps, abstol=1e-6, maxiters=1e6)   #Create an ODEProblem to solve for a specified time
@@ -44,7 +44,7 @@ sol = solve(prob, ROS3P())
 using Plots
 plot(sol[scsim.R1.sys.i])
 
-Φspan = (0.0, 2.0*Φ₀)
+Φspan = (0.0, 2.0)
 
 ensemble_sol = scsim.ensemble_parameter_sweep(
     model, u0, tspan, Φspan, ps, scsim.loop1.sys.Φₑ, scsim.R1, saveat = saveat
