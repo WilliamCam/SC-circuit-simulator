@@ -23,7 +23,7 @@ R₀ = 5.0
 res = 1/sqrt(2.0/βnorm* 100.0/βL)
 ps = [
     scsim.loop4.sys.ω => (res/ωc)
-    scsim.loop4.sys.I => 1.25*I₀
+    scsim.loop4.sys.I => 1.0*I₀
     scsim.R1.sys.R => 50.0/R₀
     scsim.C1.sys.C => 2.0/βnorm/βc
     scsim.L1.sys.L => 1.0/βL/Φ₀
@@ -49,8 +49,31 @@ plot(sol[scsim.R1.sys.i])
 ensemble_sol = scsim.ensemble_parameter_sweep(
     model, u0, tspan, Φspan, ps, scsim.loop1.sys.Φₑ, scsim.R1, saveat = saveat
 )
-using Plots
 plot(ensemble_sol.u)
+
+scsim.parameter_set(ps, scsim.loop4.sys.I, 1.25*I₀)
+ensemble_sol = scsim.ensemble_parameter_sweep(
+    model, u0, tspan, Φspan, ps, scsim.loop1.sys.Φₑ, scsim.R1, saveat = saveat
+)
+plot!(ensemble_sol.u)
+
+scsim.parameter_set(ps, scsim.loop4.sys.I, 1.5*I₀)
+ensemble_sol = scsim.ensemble_parameter_sweep(
+    model, u0, tspan, Φspan, ps, scsim.loop1.sys.Φₑ, scsim.R1, saveat = saveat
+)
+plot!(ensemble_sol.u)
+
+scsim.parameter_set(ps, scsim.loop4.sys.I, 1.75*I₀)
+ensemble_sol = scsim.ensemble_parameter_sweep(
+    model, u0, tspan, Φspan, ps, scsim.loop1.sys.Φₑ, scsim.R1, saveat = saveat
+)
+plot!(ensemble_sol.u)
+
+scsim.parameter_set(ps, scsim.loop4.sys.I, 2.0*I₀)
+ensemble_sol = scsim.ensemble_parameter_sweep(
+    model, u0, tspan, Φspan, ps, scsim.loop1.sys.Φₑ, scsim.R1, saveat = saveat
+)
+plot!(ensemble_sol.u)
 
 Ispan = (0.0, 2*I₀)
 ensemble_sol = scsim.ensemble_parameter_sweep(
