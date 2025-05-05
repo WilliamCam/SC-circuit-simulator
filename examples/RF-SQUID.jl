@@ -80,3 +80,8 @@ ensemble_sol = scsim.ensemble_parameter_sweep(
     model, u0, tspan, Ispan, ps, scsim.loop4.sys.I, scsim.R1, saveat = saveat
 )
 plot(ensemble_sol.u)
+
+
+# Re-write equations for HB 
+eqs = equations(model)
+

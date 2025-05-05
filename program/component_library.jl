@@ -1,7 +1,7 @@
 using ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra
   
 @parameters I₀ R₀ β
-@variables t                            #Time variable
+@independent_variables t                            #Time variable
 D = Differential(t)                     #First Differential operation
 D2 = Differential(t)^2                  #Second Differential operation
 I₀ = GlobalScope(I₀)

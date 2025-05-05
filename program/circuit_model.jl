@@ -196,7 +196,7 @@ function build_circuit(; dae_system = false, og_model = false)
     println()
     display(equations(model))                               #Display model equations
     println()
-    display(states(model))                                  #Display model states
+    display(unknowns(model))                                  #Display model states
     println()
     display(parameters(model))
     println()
